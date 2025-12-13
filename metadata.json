@@ -1,0 +1,5 @@
+{
+  "name": "VAMplayer React",
+  "description": "A modern, high-aesthetic media player for language learning with subtitle support, dictionary lookup, and Anki integration.",
+  "requestFramePermissions": []
+}
