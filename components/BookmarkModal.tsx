@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { getTranslation } from '../i18n';
 import { UILanguage } from '../types';
@@ -141,7 +139,7 @@ const BookmarkModal: React.FC<Props> = ({
           )}
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Category Color</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">{t.categoryColor}</label>
             <div className="flex gap-2 flex-wrap">
               {COLORS.map((c) => (
                 <button

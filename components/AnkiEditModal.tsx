@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnkiNoteData, UILanguage, Subtitle, LearningLanguage } from '../types';
 import { getTranslation } from '../i18n';
@@ -386,7 +384,7 @@ const AnkiEditModal: React.FC<Props> = ({
                           <div className="w-full h-64 flex items-center justify-center text-slate-500"><ImageIcon size={48} /></div>
                       ) : (
                           <div className="w-full h-64 flex items-center justify-center bg-transparent pointer-events-none">
-                              <span className="bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur">Release to Capture</span>
+                              <span className="bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur">{t.releaseToCapture}</span>
                           </div>
                       )}
                    </div>
@@ -473,7 +471,7 @@ const AnkiEditModal: React.FC<Props> = ({
                                             key={s.id} 
                                             onClick={() => handleExtendToSub(s, 'start')}
                                             className="h-8 bg-white/5 hover:bg-white/20 border border-white/10 rounded w-8 flex items-center justify-center cursor-pointer text-[9px] text-slate-500 hover:text-white transition-colors"
-                                            title={`Extend start to: ${s.text}`}
+                                            title={`${t.extendStartTo}: ${s.text}`}
                                         >
                                             -{(prevSubs.length - i)}
                                         </div>
@@ -494,7 +492,7 @@ const AnkiEditModal: React.FC<Props> = ({
                                             key={s.id} 
                                             onClick={() => handleExtendToSub(s, 'end')}
                                             className="h-8 bg-white/5 hover:bg-white/20 border border-white/10 rounded w-8 flex items-center justify-center cursor-pointer text-[9px] text-slate-500 hover:text-white transition-colors"
-                                            title={`Extend end to: ${s.text}`}
+                                            title={`${t.extendEndTo}: ${s.text}`}
                                         >
                                             +{(i + 1)}
                                         </div>

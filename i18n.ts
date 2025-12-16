@@ -1,5 +1,4 @@
 
-
 import { UILanguage } from './types';
 
 export const translations = {
@@ -43,6 +42,7 @@ export const translations = {
     clickToUpload: "Click buttons on card to upload",
     autoLoad: "Auto-loaded",
     search: "Search",
+    appendNext: "Append next word",
     
     // Settings
     settings: "Settings",
@@ -116,6 +116,9 @@ export const translations = {
     includeAudio: "Include Audio",
     includeVideo: "Include Video",
     resetAudio: "Reset Audio",
+    releaseToCapture: "Release to Capture",
+    extendStartTo: "Extend start to",
+    extendEndTo: "Extend end to",
     
     // Advanced Edit
     cropMode: "Text Crop",
@@ -148,6 +151,7 @@ export const translations = {
     bookmarkAt: "Bookmark at",
     recordClip: "Record Video",
     recordAudioClip: "Record Audio",
+    categoryColor: "Category Color",
 
     // Image Occlusion
     screenshot: "Screenshot / Image Occlusion",
@@ -204,10 +208,39 @@ export const translations = {
     copied: "Copied!",
     ocrErrorCORS: "Capture Failed: Security/CORS Error. Network video may not allow screenshots.",
     ocrErrorEmpty: "Capture Failed: Selection area empty or invalid.",
+    ocrNoText: "No text recognized",
     
     // OCR Modes
     ocrModeStandard: "OCR: Standard (Crop)",
     ocrModeDictionary: "OCR: Direct Dict",
+
+    // Script & Errors
+    waitingForScript: "Waiting for Userscript...",
+    noScriptResponse: "No response from Userscript.",
+    installScriptHelp: "Please ensure your Tampermonkey script is installed and listening for VAM_SEARCH_REQUEST.",
+    scriptTabTitle: "Userscript Results",
+    installScriptHint: "Install a compatible userscript to fetch external dictionaries. It should listen for VAM_SEARCH_REQUEST.",
+    scriptIntegration: "Tampermonkey Integration",
+    openInBrowser: "Open in browser",
+    checkSpelling: "Try checking the spelling or use the Script/Web tabs.",
+    searching: "Searching...",
+    seeScriptResult: "See Script Result",
+    warningMixedContent: "Warning: HTTP links may not play on this HTTPS site due to browser security (Mixed Content). Use HTTPS if possible.",
+    
+    // Toasts
+    clipSaved: "Clip captured and saved",
+    clipFailed: "Clip captured but failed to save to DB",
+    recordingFailed: "Failed to start recording (CORS restriction?)",
+    recordingDownloaded: "Recording downloaded",
+    pointASet: "Point A set",
+    loopingAB: "Looping A-B",
+    pointBError: "Point B must be after Point A",
+    loopCleared: "Loop cleared",
+    noteAdded: "Note added to Anki",
+    failedToPrepareCard: "Failed to prepare card",
+    failedToStoreImage: "Failed to upload image to Anki",
+    failedToStoreAudio: "Failed to store audio",
+    ankiError: "Anki Error",
   },
   zh: {
     library: "返回库",
@@ -249,6 +282,7 @@ export const translations = {
     clickToUpload: "点击卡片按钮上传",
     autoLoad: "已自动加载",
     search: "搜索",
+    appendNext: "追加下一个词",
     
     // Settings
     settings: "设置",
@@ -322,6 +356,9 @@ export const translations = {
     includeAudio: "包含音频",
     includeVideo: "包含视频 (先制卡后录制)",
     resetAudio: "重置音频范围",
+    releaseToCapture: "松开以捕获",
+    extendStartTo: "扩展起点至",
+    extendEndTo: "扩展终点至",
 
     // Advanced Edit
     cropMode: "文本裁剪",
@@ -354,6 +391,7 @@ export const translations = {
     bookmarkAt: "书签",
     recordClip: "录制视频片段",
     recordAudioClip: "录制音频",
+    categoryColor: "分类颜色",
 
     // Image Occlusion
     screenshot: "截图 / 图片遮挡",
@@ -410,10 +448,39 @@ export const translations = {
     copied: "已复制",
     ocrErrorCORS: "截图失败：安全/跨域错误。该网络视频可能不支持截图。",
     ocrErrorEmpty: "截图失败：选区为空或无效。",
+    ocrNoText: "未识别到文字",
     
     // OCR Modes
     ocrModeStandard: "OCR: 标准模式",
     ocrModeDictionary: "OCR: 直达词典",
+
+    // Script & Errors
+    waitingForScript: "等待油猴脚本响应...",
+    noScriptResponse: "未收到油猴脚本响应。",
+    installScriptHelp: "请确保已安装 Tampermonkey 脚本并正在监听 VAM_SEARCH_REQUEST。",
+    scriptTabTitle: "Userscript Results",
+    installScriptHint: "安装兼容的脚本以获取外部词典。脚本需监听 VAM_SEARCH_REQUEST。",
+    scriptIntegration: "油猴脚本集成",
+    openInBrowser: "在浏览器打开",
+    checkSpelling: "尝试检查拼写或使用脚本/网页标签页。",
+    searching: "搜索中...",
+    seeScriptResult: "查看脚本结果",
+    warningMixedContent: "警告：由于浏览器安全限制（混合内容），HTTP 链接可能无法在 HTTPS 站点上播放。请尽可能使用 HTTPS。",
+
+    // Toasts
+    clipSaved: "片段已截取并保存",
+    clipFailed: "片段已截取但保存到数据库失败",
+    recordingFailed: "启动录制失败（可能是 CORS 限制？）",
+    recordingDownloaded: "录音/像已下载",
+    pointASet: "A点 已设置",
+    loopingAB: "正在循环 A-B",
+    pointBError: "B点 必须在 A点 之后",
+    loopCleared: "循环已清除",
+    noteAdded: "笔记已添加到 Anki",
+    failedToPrepareCard: "准备卡片失败",
+    failedToStoreImage: "上传图片到 Anki 失败",
+    failedToStoreAudio: "存储音频失败",
+    ankiError: "Anki 错误",
   }
 };
 

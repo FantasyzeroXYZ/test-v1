@@ -1,10 +1,8 @@
-
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactPlayer from 'react-player';
 import Tesseract from 'tesseract.js';
 import { Subtitle, MediaType, AnkiConfig, VideoLibraryItem, SubtitleMode, UILanguage, LearningLanguage, AnkiNoteData, Bookmark, ABLoopMode, CapturedClip, ABButtonMode } from './types';
-import { formatTime, parseSRT, parseVTT, generateVideoThumbnail, captureVideoFrame, extractAudioClip, recordAudioFromPlayer, getEventY, getSupportedMimeType, downloadBlob } from './utils';
+import { formatTime, parseSRT, parseVTT, parseASS, generateVideoThumbnail, captureVideoFrame, extractAudioClip, recordAudioFromPlayer, getEventY, getSupportedMimeType, downloadBlob } from './utils';
 import { ankiService, setAnkiAddress } from './services/ankiService';
 import { initDB, saveVideo, getLibrary, getVideoFile, deleteVideo, exportAllData, importAllData, clearAllData, saveClip, getClips, deleteClip } from './services/storageService';
 import { getTranslation } from './i18n';
@@ -36,6 +34,7 @@ const App: React.FC = () => {
   const [isSeeking, setIsSeeking] = useState(false); 
   const [isBuffering, setIsBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isWideScreen, setIsWideScreen] = useState(false); // Track screen width for layout
   
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [secondarySubtitles, setSecondarySubtitles] = useState<Subtitle[]>([]);
@@ -147,7 +146,10 @@ const App: React.FC = () => {
   
   const geometryRafRef = useRef<number | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
-  const wasPlayingRef = useRef(false);
+  
+  // Use a dedicated ref for dictionary auto-resume logic to avoid conflict with seek logic
+  const dictResumeRef = useRef(false);
+  const wasPlayingRef = useRef(false); // For seeking
 
   const Player = ReactPlayer as any;
   const segmenterRef = useRef<any>(null);
@@ -167,6 +169,15 @@ const App: React.FC = () => {
   useEffect(() => { recordingTargetRef.current = recordingTarget; }, [recordingTarget]);
   useEffect(() => { recorderModeRef.current = recorderMode; }, [recorderMode]);
   
+  // Screen width detection
+  useEffect(() => {
+      const media = window.matchMedia('(min-width: 768px)');
+      setIsWideScreen(media.matches);
+      const listener = (e: MediaQueryListEvent) => setIsWideScreen(e.matches);
+      media.addEventListener('change', listener);
+      return () => media.removeEventListener('change', listener);
+  }, []);
+
   // Saved OCR Mode
   useEffect(() => {
       const savedOcrMode = localStorage.getItem('vam_ocr_mode');
@@ -461,7 +472,7 @@ const App: React.FC = () => {
               if (currentTarget?.filename) {
                   // If we have a target filename (from Anki card), download it directly
                   downloadBlob(blob, currentTarget.filename);
-                  showToast("Recording downloaded", 'success');
+                  showToast(t.recordingDownloaded, 'success');
               } else {
                   // Otherwise save to clips list and DB
                   const titleTime = formatTime(playerRef.current?.getCurrentTime() || 0);
@@ -487,10 +498,10 @@ const App: React.FC = () => {
                   try {
                       await saveClip(newClip);
                       setCapturedClips(prev => [newClip, ...prev]);
-                      showToast("Clip captured and saved", 'success');
+                      showToast(t.clipSaved, 'success');
                   } catch (e) {
                       console.error("Failed to save clip", e);
-                      showToast("Clip captured but failed to save to DB", 'error');
+                      showToast(t.clipFailed, 'error');
                   }
               }
 
@@ -506,7 +517,7 @@ const App: React.FC = () => {
           showToast(t.recording, 'info');
       } catch (e) {
           console.error("Recording failed", e);
-          showToast("Failed to start recording (CORS restriction?)", 'error');
+          showToast(t.recordingFailed, 'error');
       }
   }, [t, showToast]);
 
@@ -528,7 +539,7 @@ const App: React.FC = () => {
               if (deleted) URL.revokeObjectURL(deleted.src);
               return updated;
           });
-          showToast("Clip deleted", 'success');
+          showToast(t.deleteClip + " Success", 'success');
       } catch (e) {
           console.error("Failed to delete clip", e);
           showToast("Failed to delete clip", 'error');
@@ -781,7 +792,11 @@ const App: React.FC = () => {
       const reader = new FileReader();
       reader.onload = (ev) => {
           const text = ev.target?.result as string;
-          const parsed = file.name.endsWith('.vtt') ? parseVTT(text) : parseSRT(text);
+          let parsed: Subtitle[] = [];
+          if (file.name.endsWith('.vtt')) parsed = parseVTT(text);
+          else if (file.name.endsWith('.ass')) parsed = parseASS(text);
+          else parsed = parseSRT(text);
+          
           if (type === 'primary') {
               if (activeVideoItem?.id === item.id) {
                  setSubtitles(parsed);
@@ -893,21 +908,44 @@ const App: React.FC = () => {
 
       } catch (e) {
           console.error(e);
-          showToast("Failed to prepare card", 'error');
+          showToast(t.failedToPrepareCard, 'error');
       } finally {
           setIsAddingToAnki(false);
       }
   };
 
   const handleWordClick = (segment: string, fullText: string, segments: string[], nextIndex: number) => {
+    // Save state and pause. Use a separate ref for dictionary resume to not conflict with seek resume.
+    dictResumeRef.current = isPlaying;
     if (isPlaying) setIsPlaying(false);
+    
     const cleanWord = segment.trim(); 
     if (!cleanWord) return;
     setSelectedWord(cleanWord);
     setSelectedSentence(fullText);
     setCurrentSegments(segments);
     setNextSegmentIndex(nextIndex);
-    isFullscreen ? setActiveFullscreenPanel('dictionary') : setDictOpen(true);
+    
+    if (isFullscreen) {
+        setActiveFullscreenPanel('dictionary');
+    } else {
+        setDictOpen(true);
+    }
+  };
+
+  const handleDictClose = () => {
+    if (isFullscreen) {
+        setActiveFullscreenPanel('none');
+    } else {
+        setDictOpen(false);
+    }
+    
+    // Auto-resume if it was playing before dictionary opened and is currently paused
+    // Only resume if we are not still playing (e.g. user manually hit play while pinned)
+    if (dictResumeRef.current && !isPlaying) {
+        setIsPlaying(true);
+    }
+    dictResumeRef.current = false;
   };
 
   const handleAppendWord = () => {
@@ -954,8 +992,11 @@ const App: React.FC = () => {
     else document.exitFullscreen();
   };
   const toggleTranscript = () => {
-      if (isFullscreen) setActiveFullscreenPanel(prev => prev === 'transcript' ? 'none' : 'transcript');
-      else setShowTranscript(prev => !prev);
+      if (isFullscreen) {
+          setActiveFullscreenPanel(prev => prev === 'transcript' ? 'none' : 'transcript');
+      } else {
+          setShowTranscript(prev => !prev);
+      }
   };
 
   const handleQuickCard = async () => {
@@ -982,7 +1023,7 @@ const App: React.FC = () => {
   const performDirectOcr = async () => {
       const videoEl = playerRef.current?.getInternalPlayer();
       if (!videoEl || !(videoEl instanceof HTMLVideoElement)) {
-          showToast("OCR not supported for this video type.", 'error');
+          showToast(t.ocrErrorCORS, 'error');
           return;
       }
 
@@ -1036,12 +1077,12 @@ const App: React.FC = () => {
                   setDictOpen(true);
               }
           } else {
-              showToast("No text recognized", 'error');
+              showToast(t.ocrNoText, 'error');
           }
 
       } catch (e) {
           console.error("Direct OCR Error", e);
-          showToast("OCR Failed", 'error');
+          showToast(t.ocrErrorEmpty, 'error');
       }
   };
 
@@ -1055,7 +1096,7 @@ const App: React.FC = () => {
       // Standard Mode
       const videoEl = playerRef.current?.getInternalPlayer();
       if (!videoEl || !(videoEl instanceof HTMLVideoElement)) {
-          showToast("OCR not supported for this video type.", 'error');
+          showToast(t.ocrErrorCORS, 'error');
           return;
       }
       
@@ -1067,7 +1108,7 @@ const App: React.FC = () => {
           setOcrResult({ text: null, image: src });
           // No longer forcing 'vertical' reset to respect persistence preference
       } else {
-          showToast("Failed to capture video frame.", 'error');
+          showToast(t.ocrErrorCORS, 'error');
       }
   };
 
@@ -1178,7 +1219,7 @@ const App: React.FC = () => {
           }
       } catch (e) {
           console.error("OCR Error", e);
-          showToast("OCR Failed", 'error');
+          showToast(t.ocrErrorEmpty, 'error');
       } finally {
           setIsOcrProcessing(false);
       }
@@ -1315,7 +1356,7 @@ const App: React.FC = () => {
 
   const handlePlayerError = useCallback((e: any, data?: any, hlsInstance?: any) => {
       if (window.location.protocol === 'https:' && activeVideoItem?.src?.startsWith('http:')) {
-          showToast("Playback Error: Cannot play HTTP stream on HTTPS site (Mixed Content).", 'error');
+          showToast(t.warningMixedContent, 'error');
           if (hlsInstance) {
               hlsInstance.destroy();
               return;
@@ -1426,22 +1467,22 @@ const App: React.FC = () => {
     if (abLoopState === 'none') {
         setLoopA(currentTime);
         setAbLoopState('a-set');
-        showToast("Point A set", 'info');
+        showToast(t.pointASet, 'info');
     } else if (abLoopState === 'a-set') {
         if (currentTime > loopA) {
             setLoopB(currentTime);
             setAbLoopState('looping');
-            showToast("Looping A-B", 'info');
+            showToast(t.loopingAB, 'info');
             playerRef.current?.seekTo(loopA, 'seconds');
         } else {
-            showToast("Point B must be after Point A", 'error');
+            showToast(t.pointBError, 'error');
             setAbLoopState('none');
         }
     } else {
         setAbLoopState('none');
         setLoopA(0);
         setLoopB(0);
-        showToast("Loop cleared", 'info');
+        showToast(t.loopCleared, 'info');
     }
   }, [abLoopState, loopA, ankiConfig.abButtonMode, handleStartRecording, handleStopRecording, showToast]);
 
@@ -1454,7 +1495,7 @@ const App: React.FC = () => {
               await ankiService.storeMediaFile(imageFilename, noteData.imageData);
           } catch (e) {
               console.error("Failed to store image", e);
-              showToast("Failed to upload image to Anki", 'error');
+              showToast(t.failedToStoreImage, 'error');
               return;
           }
       }
@@ -1476,6 +1517,7 @@ const App: React.FC = () => {
                   await ankiService.storeMediaFile(audioFilename, audioBase64);
               } catch (e) {
                    console.error("Failed to store audio", e);
+                   showToast(t.failedToStoreAudio, 'error');
               }
           } else {
               audioFilename = ''; // Reset if failed
@@ -1528,11 +1570,11 @@ const App: React.FC = () => {
 
       try {
           await ankiService.addNote(note);
-          showToast("Note added to Anki", 'success');
+          showToast(t.noteAdded, 'success');
           setIsAnkiModalOpen(false);
       } catch (e: any) {
           console.error(e);
-          showToast(`Anki Error: ${e.message}`, 'error');
+          showToast(`${t.ankiError}: ${e.message}`, 'error');
       }
   };
 
@@ -1547,7 +1589,7 @@ const App: React.FC = () => {
           isOpen: true,
           mode: 'add',
           time: playedSeconds,
-          defaultTitle: `Bookmark at ${formatTime(playedSeconds)}`,
+          defaultTitle: `${t.bookmarkAt} ${formatTime(playedSeconds)}`,
           defaultNote: ''
       });
   };
@@ -2562,7 +2604,7 @@ const App: React.FC = () => {
                         <>
                             <DictionaryPanel 
                                 word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} 
-                                isOpen={activeFullscreenPanel === 'dictionary'} onClose={() => setActiveFullscreenPanel('none')} variant="sidebar" 
+                                isOpen={activeFullscreenPanel === 'dictionary'} onClose={handleDictClose} variant="sidebar" 
                                 learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length}
                                 lang={lang}
                                 searchEngine={ankiConfig.searchEngine}
@@ -2577,8 +2619,30 @@ const App: React.FC = () => {
       
       {!isFullscreen && (
         <>
-            <DictionaryPanel word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} isOpen={dictOpen} onClose={() => setDictOpen(false)} variant="bottom-sheet" learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length} lang={lang} searchEngine={ankiConfig.searchEngine} />
-            <TranscriptPanel isOpen={showTranscript} onClose={() => setShowTranscript(false)} subtitles={subtitles} currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} variant="bottom-sheet" lang={lang} />
+            <DictionaryPanel 
+                word={selectedWord} 
+                sentence={selectedSentence} 
+                onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} 
+                isAddingToAnki={isAddingToAnki} 
+                isOpen={dictOpen} 
+                onClose={handleDictClose} 
+                variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
+                learningLanguage={learningLang} 
+                onAppendNext={handleAppendWord} 
+                canAppend={nextSegmentIndex < currentSegments.length} 
+                lang={lang} 
+                searchEngine={ankiConfig.searchEngine} 
+            />
+            <TranscriptPanel 
+                isOpen={showTranscript} 
+                onClose={() => setShowTranscript(false)} 
+                subtitles={subtitles} 
+                currentSubtitleIndex={currentSubtitleIndex} 
+                onSeek={handleSeekTo} 
+                subtitleOffset={subtitleOffset} 
+                variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
+                lang={lang} 
+            />
         </>
       )}
     </div>

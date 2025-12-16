@@ -1,5 +1,3 @@
-
-
 import React, { useRef, useState, useEffect } from 'react';
 import { VideoLibraryItem, UILanguage } from '../types';
 import { getTranslation } from '../i18n';
@@ -207,7 +205,7 @@ const VideoLibrary: React.FC<Props> = ({
       <input 
         type="file" 
         ref={hiddenSubInputRef} 
-        accept=".srt,.vtt" 
+        accept=".srt,.vtt,.ass" 
         className="hidden" 
         onChange={handleSubFileChange}
       />
@@ -542,8 +540,8 @@ const VideoLibrary: React.FC<Props> = ({
                     />
                     {isMixedContent && (
                         <div className="text-yellow-500 text-xs mt-2 flex items-start gap-1 p-2 bg-yellow-500/10 rounded border border-yellow-500/20">
-                            <span className="font-bold">⚠️ Warning:</span> 
-                            <span>HTTP links may not play on this HTTPS site due to browser security (Mixed Content). Use HTTPS if possible.</span>
+                            <span className="font-bold">⚠️</span> 
+                            <span>{t.warningMixedContent}</span>
                         </div>
                     )}
                   </div>

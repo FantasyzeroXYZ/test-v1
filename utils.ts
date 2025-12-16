@@ -78,6 +78,70 @@ export const parseVTT = (content: string): Subtitle[] => {
   return subtitles;
 };
 
+export const parseASS = (content: string): Subtitle[] => {
+  const lines = content.split(/\r?\n/);
+  const subtitles: Subtitle[] = [];
+  let eventsSection = false;
+  let formatMap: Record<string, number> = {};
+
+  for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '[Events]') {
+          eventsSection = true;
+          continue;
+      }
+      if (!eventsSection) continue;
+
+      if (trimmed.startsWith('Format:')) {
+          const keys = trimmed.substring(7).split(',').map(k => k.trim().toLowerCase());
+          keys.forEach((k, i) => formatMap[k] = i);
+      } else if (trimmed.startsWith('Dialogue:')) {
+          if (Object.keys(formatMap).length === 0) continue;
+          
+          // "Dialogue: " length is usually 10, but handle potential spacing
+          const rawLine = trimmed.substring(trimmed.indexOf(':') + 1).trim();
+          
+          const parts = rawLine.split(',');
+          // We need at least enough parts to cover the format up to Text
+          // Note: Text is the last field and can contain commas, so we handle it specially
+          const columns = Object.keys(formatMap).length;
+          
+          if (parts.length < columns) continue;
+
+          const startIdx = formatMap['start'];
+          const endIdx = formatMap['end'];
+          const textIdx = formatMap['text'];
+
+          if (startIdx === undefined || endIdx === undefined || textIdx === undefined) continue;
+
+          const parseTime = (str: string) => {
+              const [h, m, s] = str.split(':');
+              return parseInt(h) * 3600 + parseInt(m) * 60 + parseFloat(s);
+          };
+
+          const start = parseTime(parts[startIdx]);
+          const end = parseTime(parts[endIdx]);
+          
+          // Rejoin text in case it had commas
+          let text = parts.slice(textIdx).join(',');
+          
+          // Clean ASS tags
+          text = text.replace(/{[^}]+}/g, ''); // Remove styles like {\an8}
+          text = text.replace(/\\N/g, '\n').replace(/\\n/g, '\n').replace(/\\h/g, ' ');
+
+          if (text.trim()) {
+              subtitles.push({
+                  id: subtitles.length,
+                  start, 
+                  end, 
+                  text: text.trim()
+              });
+          }
+      }
+  }
+  return subtitles;
+};
+
 export const generateVideoThumbnail = (file: File): Promise<string> => {
     return new Promise((resolve) => {
         const video = document.createElement('video');
