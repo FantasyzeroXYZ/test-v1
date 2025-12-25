@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { DictionaryResponse, LearningLanguage, UILanguage } from '../types';
 import { Search, Plus, Loader2, BookOpen, X, ArrowRight, Volume2, ExternalLink, PenTool, Globe, Puzzle, Pin } from 'lucide-react';
@@ -17,6 +18,39 @@ interface Props {
   lang: UILanguage;
   searchEngine: string;
 }
+
+// Helper to format dictionary data into HTML for Anki
+const formatDictionaryHTML = (data: DictionaryResponse): string => {
+  if (!data) return '';
+  let html = '';
+  // Word and Phonetic
+  html += `<div><b style="font-size: 1.2em;">${data.word}</b>`;
+  // Try to find a phonetic from any entry
+  const phonetic = data.entries.find(e => e.phonetic)?.phonetic;
+  if (phonetic) html += ` <span style="color: #666; font-family: sans-serif;">[${phonetic}]</span>`;
+  html += `</div>`;
+
+  data.entries.forEach(entry => {
+    html += `<div style="margin-top: 0.5em;">`;
+    html += `<span style="background-color: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; border-radius: 4px; padding: 1px 4px; font-size: 0.8em; font-weight: bold; margin-right: 6px;">${entry.partOfSpeech}</span>`;
+    
+    if (entry.senses && entry.senses.length > 0) {
+      html += `<ol style="margin: 0.2em 0 0 1.2em; padding-left: 0;">`;
+      entry.senses.forEach(sense => {
+        html += `<li style="margin-bottom: 0.3em;">${sense.definition}`;
+        if (sense.examples && sense.examples.length > 0) {
+           html += `<ul style="margin: 0.1em 0 0 0; padding-left: 1em; list-style-type: disc; color: #64748b; font-size: 0.9em; font-style: italic;">`;
+           sense.examples.slice(0, 3).forEach(ex => html += `<li>${ex}</li>`);
+           html += `</ul>`;
+        }
+        html += `</li>`;
+      });
+      html += `</ol>`;
+    }
+    html += `</div>`;
+  });
+  return html;
+};
 
 const DictionaryPanel: React.FC<Props> = ({ 
   isOpen, onClose, word, sentence, learningLanguage, onAddToAnki, onAppendNext, canAppend, isAddingToAnki, variant = 'bottom-sheet', lang, searchEngine
@@ -431,7 +465,7 @@ const DictionaryPanel: React.FC<Props> = ({
                                 ></textarea>
                                 <button 
                                     onClick={() => {
-                                        const def = customDef || data.entries?.[0]?.senses?.[0]?.definition || '';
+                                        const def = customDef || formatDictionaryHTML(data);
                                         onAddToAnki(searchTerm, def);
                                     }}
                                     disabled={isAddingToAnki}
@@ -467,7 +501,7 @@ const DictionaryPanel: React.FC<Props> = ({
                              />
                              <div className="mt-auto pt-6 border-t border-white/10 sticky bottom-0 bg-[#0f172a] pb-4">
                                 <button 
-                                    onClick={() => onAddToAnki(searchTerm, t.seeScriptResult)}
+                                    onClick={() => onAddToAnki(searchTerm, scriptHtml || '')}
                                     disabled={isAddingToAnki}
                                     className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 text-white font-bold text-sm transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-[0.98]"
                                 >

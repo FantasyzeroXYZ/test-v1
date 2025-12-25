@@ -58,6 +58,7 @@ export interface AnkiConfig {
           backExtra: string;
           remarks: string;
           audio: string;
+          id?: string;
       };
   };
   subtitleSize: number;

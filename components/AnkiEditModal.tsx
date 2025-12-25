@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnkiNoteData, UILanguage, Subtitle, LearningLanguage } from '../types';
 import { getTranslation } from '../i18n';
-import { Save, X, Clock, Image as ImageIcon, Scissors, Play, Check, ScanEye, Trash2, Eraser, Volume2, RotateCcw, Video } from 'lucide-react';
+import { Save, X, Clock, Image as ImageIcon, Scissors, Play, Check, ScanEye, Trash2, Eraser, Volume2, RotateCcw, Video, Mic } from 'lucide-react';
 import { formatTime } from '../utils';
 
 interface Props {
@@ -56,9 +56,10 @@ const AnkiEditModal: React.FC<Props> = ({
       setIsCropping(false);
       // Initialize masks from props if available (e.g. from video mask)
       setMasks(initialData.occlusionMasks || []); 
-      setIncludeAudio(false);
-      setIncludeVideo(false);
-  }, [initialData, isOpen]);
+      // Default include audio based on passed prop or default true for standard cards
+      setIncludeAudio(initialData.includeAudio !== undefined ? initialData.includeAudio : !isOcclusionMode);
+      setIncludeVideo(!!initialData.includeVideo);
+  }, [initialData, isOpen, isOcclusionMode]);
 
   // Clean up RAF on unmount
   useEffect(() => {
@@ -271,24 +272,42 @@ const AnkiEditModal: React.FC<Props> = ({
   const currentStart = data.audioStart || 0;
   const currentEnd = data.audioEnd || 0;
   
-  // Audio slider range logic for IO mode: Initial +/- 5 seconds
-  // Using initialData ensures that the scale doesn't change as we drag the current start/end values
-  const initStart = initialData.audioStart || 0;
-  const initEnd = initialData.audioEnd || 0;
-  const extendedMin = Math.max(0, initStart - 5);
-  const extendedMax = Math.min(duration || 100, initEnd + 5);
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div className={`bg-[#1e293b] border border-white/10 rounded-xl w-full ${isOcclusionMode ? 'max-w-6xl' : 'max-w-4xl'} max-h-[95vh] shadow-2xl flex flex-col overflow-hidden`}>
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#0f172a]">
-           <h3 className="font-bold text-white flex items-center gap-2">
-             {isOcclusionMode ? <ScanEye size={18} className="text-secondary"/> : <Save size={18} className="text-primary"/>} 
-             {isOcclusionMode ? t.editCard : t.editCard}
-           </h3>
-           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#0f172a] shrink-0">
+           <div className="flex items-center gap-3">
+               <h3 className="font-bold text-white flex items-center gap-2 text-lg">
+                 {isOcclusionMode ? <ScanEye size={20} className="text-secondary"/> : <Save size={20} className="text-primary"/>} 
+                 {isOcclusionMode ? t.editCard : t.editCard}
+               </h3>
+               
+               {/* Mode Badges */}
+               <div className="flex items-center gap-2 ml-4">
+                   <button 
+                       onClick={() => setIncludeAudio(!includeAudio)}
+                       className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${includeAudio ? 'bg-primary/20 border-primary text-primary' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                   >
+                       <Mic size={12} />
+                       {t.includeAudio}
+                       {includeAudio && <Check size={12} strokeWidth={3}/>}
+                   </button>
+                   <button 
+                       onClick={() => setIncludeVideo(!includeVideo)}
+                       className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 ${includeVideo ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                   >
+                       <Video size={12} />
+                       {t.includeVideo}
+                       {includeVideo && <Check size={12} strokeWidth={3}/>}
+                   </button>
+               </div>
+           </div>
+           
+           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
              <X size={20} />
            </button>
         </div>
@@ -300,44 +319,18 @@ const AnkiEditModal: React.FC<Props> = ({
                 
                 {/* 1. Image Preview / Occlusion Editor */}
                 <div className="space-y-3 relative flex flex-col h-full">
-                   {/* Editor Toolbar */}
-                   <div className="flex flex-col gap-2 mb-2">
-                       <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                 {isOcclusionMode && <span className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><ScanEye size={14}/> {t.drawMask}</span>}
-                                 
-                                 {/* Audio/Video Toggles */}
-                                 <div className={`flex items-center gap-2 ${isOcclusionMode ? 'border-l border-white/10 pl-4' : ''}`}>
-                                     {/* Audio Checkbox */}
-                                     <label className="flex items-center gap-2 cursor-pointer group select-none">
-                                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${includeAudio ? 'bg-primary border-primary' : 'border-slate-500 group-hover:border-white'}`}>
-                                             {includeAudio && <Check size={10} className="text-white" />}
-                                         </div>
-                                         <input type="checkbox" className="hidden" checked={includeAudio} onChange={e => setIncludeAudio(e.target.checked)} />
-                                         <span className={`text-xs font-bold uppercase ${includeAudio ? 'text-primary' : 'text-slate-400 group-hover:text-white'}`}>{t.includeAudio}</span>
-                                     </label>
-
-                                     {/* Video Checkbox */}
-                                     <label className="flex items-center gap-2 cursor-pointer group select-none ml-2">
-                                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${includeVideo ? 'bg-indigo-500 border-indigo-500' : 'border-slate-500 group-hover:border-white'}`}>
-                                             {includeVideo && <Check size={10} className="text-white" />}
-                                         </div>
-                                         <input type="checkbox" className="hidden" checked={includeVideo} onChange={e => setIncludeVideo(e.target.checked)} />
-                                         <span className={`text-xs font-bold uppercase ${includeVideo ? 'text-indigo-400' : 'text-slate-400 group-hover:text-white'}`}>{t.includeVideo}</span>
-                                     </label>
-                                 </div>
-                            </div>
-                            
-                            {isOcclusionMode && (
-                                <button 
-                                     onClick={() => setMasks([])}
-                                     className="text-xs text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors"
-                                >
-                                    <Eraser size={12}/> {t.clearMasks}
-                                </button>
-                            )}
+                   {/* Editor Toolbar (IO Only) */}
+                   {isOcclusionMode && (
+                       <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-bold text-secondary uppercase flex items-center gap-2"><ScanEye size={14}/> {t.drawMask}</span>
+                            <button 
+                                    onClick={() => setMasks([])}
+                                    className="text-xs text-slate-400 hover:text-red-400 flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-white/5"
+                            >
+                                <Eraser size={12}/> {t.clearMasks}
+                            </button>
                        </div>
-                   </div>
+                   )}
 
                    {/* Container that uses flexible sizing to tight-wrap image */}
                    <div className={`relative w-full bg-black rounded-lg overflow-hidden border border-white/10 group shadow-lg select-none flex items-center justify-center min-h-[300px] ${isScrubbingImage ? 'bg-transparent border-primary/50' : ''}`}>
@@ -346,13 +339,13 @@ const AnkiEditModal: React.FC<Props> = ({
                           /* Inner container: Ref here. Tightly wraps image. */
                           <div 
                                 ref={imageContainerRef}
-                                className={`relative max-w-full max-h-[60vh] ${isOcclusionMode ? 'cursor-crosshair touch-none' : ''}`}
+                                className={`relative max-w-full max-h-[50vh] ${isOcclusionMode ? 'cursor-crosshair touch-none' : ''}`}
                                 onMouseDown={isOcclusionMode ? handleMaskMouseDown : undefined}
                                 onTouchStart={isOcclusionMode ? handleMaskTouchStart : undefined}
                           >
                             <img 
                                 src={`data:image/jpeg;base64,${data.imageData}`} 
-                                className="max-w-full max-h-[60vh] w-auto h-auto object-contain pointer-events-none block" 
+                                className="max-w-full max-h-[50vh] w-auto h-auto object-contain pointer-events-none block" 
                                 alt="Preview"
                             />
                             

@@ -167,19 +167,41 @@ export const generateVideoThumbnail = (file: File): Promise<string> => {
 };
 
 export const captureVideoFrame = (videoElement: HTMLVideoElement | null): string | null => {
-    if (!videoElement) return null;
+    if (!videoElement) {
+        console.warn("Capture failed: No video element provided.");
+        return null;
+    }
+    
+    // Ensure video has dimensions and data
+    if (videoElement.videoWidth === 0 || videoElement.videoHeight === 0 || videoElement.readyState < 2) {
+        console.warn("Capture failed: Video not ready or has 0 dimensions.");
+        return null;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = videoElement.videoWidth;
     canvas.height = videoElement.videoHeight;
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
+    
     try {
+        // Attempt to draw the video frame
+        // NOTE: This will fail with SecurityError if the video is cross-origin and lacks CORS headers
         ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        
         // Returns Base64 string without data:image/jpeg;base64, prefix for AnkiConnect
+        // If this line throws, it's a Tainted Canvas issue
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        if (!dataUrl || dataUrl === 'data:,') {
+            console.warn("Capture produced empty data.");
+            return null; 
+        }
+        
         return dataUrl.split(',')[1];
-    } catch (e) {
-        console.error("Capture frame failed", e);
+    } catch (e: any) {
+        console.error("Capture frame failed. Likely a CORS/Security restriction on this video source.", e);
+        // We cannot bubble the error easily here without breaking types, but returning null indicates failure.
         return null;
     }
 };
@@ -218,9 +240,6 @@ export const extractAudioClip = async (file: File, start: number, end: number): 
 };
 
 export const recordAudioFromPlayer = async (player: any, start: number, end: number): Promise<{base64: string, extension: string} | null> => {
-    // This is a complex fallback if we can't extract from file. 
-    // It requires playing the video and capturing stream which is handled in App.tsx for AB Loop.
-    // For Anki export specifically, we might rely on the main recording flow if file access fails.
     return null; 
 };
 
@@ -294,9 +313,22 @@ export const getEventY = (e: React.MouseEvent | React.TouchEvent | MouseEvent | 
 };
 
 export const getSupportedMimeType = (type: 'video' | 'audio') => {
-    const types = type === 'video' 
-        ? ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4']
-        : ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/mp4'];
+    // Prefer webm/opus for broad compatibility
+    const audioTypes = [
+        'audio/webm;codecs=opus', 
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4' // Safari support
+    ];
+    
+    const videoTypes = [
+        'video/webm;codecs=vp9', 
+        'video/webm;codecs=vp8', 
+        'video/webm', 
+        'video/mp4'
+    ];
+
+    const types = type === 'video' ? videoTypes : audioTypes;
     return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
 };
 
@@ -309,4 +341,17 @@ export const downloadBlob = (blob: Blob, filename: string) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+};
+
+export const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      const base64 = base64String.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };

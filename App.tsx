@@ -1,21 +1,24 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactPlayer from 'react-player';
 import Tesseract from 'tesseract.js';
 import { Subtitle, MediaType, AnkiConfig, VideoLibraryItem, SubtitleMode, UILanguage, LearningLanguage, AnkiNoteData, Bookmark, ABLoopMode, CapturedClip, ABButtonMode } from './types';
-import { formatTime, parseSRT, parseVTT, parseASS, generateVideoThumbnail, captureVideoFrame, extractAudioClip, recordAudioFromPlayer, getEventY, getSupportedMimeType, downloadBlob } from './utils';
+import { formatTime, parseSRT, parseVTT, parseASS, generateVideoThumbnail, captureVideoFrame, extractAudioClip, recordAudioFromPlayer, getEventY, getSupportedMimeType, downloadBlob, blobToBase64 } from './utils';
 import { ankiService, setAnkiAddress } from './services/ankiService';
 import { initDB, saveVideo, getLibrary, getVideoFile, deleteVideo, exportAllData, importAllData, clearAllData, saveClip, getClips, deleteClip } from './services/storageService';
 import { getTranslation } from './i18n';
-import AnkiWidget from './components/AnkiWidget';
 import DictionaryPanel from './components/DictionaryPanel';
 import AnkiEditModal from './components/AnkiEditModal';
 import BookmarkModal from './components/BookmarkModal';
 import VideoLibrary from './components/VideoLibrary';
 import TranscriptPanel from './components/TranscriptPanel';
+import Header from './components/Header';
+import SettingsSidebar from './components/SettingsSidebar';
+import PlayerControls from './components/PlayerControls';
+import OCRModal from './components/OCRModal';
 import { 
-  Play, Pause, SkipBack, SkipForward, Type, FileVideo, 
-  FileAudio, Maximize2, Minimize2, Languages, List, X, ChevronLeft, MessageSquare, Clock, Settings as SettingsIcon, Globe, ChevronDown, BookA,
-  EyeOff, RefreshCw, PlusSquare, Repeat, Loader2, Lock, Unlock, BookmarkPlus, Book, Trash2, Edit2, Camera, CheckCircle, AlertCircle, Info, Bookmark as BookmarkIcon, MousePointerClick, TextCursor, Sliders, Database, Download, Upload, HardDrive, Film, Mic, Video, Scissors, ScanText, Copy, Languages as LanguagesIcon, Image as ImageIcon, Bug, Crop, Eraser, MoveVertical, MoveHorizontal, ChevronRight, RotateCcw, Zap
+  Play, Loader2, Lock, Unlock, BookmarkPlus, Book, Camera, BookA, EyeOff, PlusSquare, ScanText, Zap,
+  CheckCircle, AlertCircle, Info, X, Edit2, Trash2, FileAudio, Mic, Video
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -125,7 +128,7 @@ const App: React.FC = () => {
     ip: '127.0.0.1', port: '8765',
     deck: '', model: '', tags: ['vamplayer'],
     fields: { word: '', sentence: '', definition: '', translation: '', audio: '', image: '', video: '' },
-    imageOcclusion: { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '' } },
+    imageOcclusion: { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '', id: '' } },
     subtitleSize: 16, // Default 16
     subtitleBottomMargin: 5, // Default 5
     subtitleDisplayMode: 'interactive', // Default
@@ -143,6 +146,8 @@ const App: React.FC = () => {
   const isRecordingRef = useRef(false); 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // Callback ref to intercept recording for Anki automated flow (AUDIO ONLY)
+  const ankiRecordingCallbackRef = useRef<((blob: Blob) => Promise<void>) | null>(null);
   
   const geometryRafRef = useRef<number | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -318,7 +323,7 @@ const App: React.FC = () => {
 
           // Initialize IO config if missing
           if (!config.imageOcclusion) {
-              config.imageOcclusion = { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '' } };
+              config.imageOcclusion = { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '', id: '' } };
           } 
           
           if (!config.fields.video) config.fields.video = '';
@@ -438,11 +443,19 @@ const App: React.FC = () => {
       const currentMode = modeOverride || recorderModeRef.current || 'video';
 
       try {
-          // Cast to any because captureStream is not in the default HTMLVideoElement definition in some TS environments
-          const stream = (videoEl as any).captureStream() as MediaStream;
-          // Filter tracks based on mode
+          const captureStream = (videoEl as any).captureStream() as MediaStream;
+          let streamToRecord = captureStream;
+
+          // CRITICAL FIX: For pure audio, create a new MediaStream with ONLY audio tracks.
+          // This prevents recording a video file with black frames.
           if (currentMode === 'audio') {
-              stream.getVideoTracks().forEach(track => track.stop());
+              const audioTracks = captureStream.getAudioTracks();
+              if (audioTracks.length > 0) {
+                  streamToRecord = new MediaStream(audioTracks);
+              } else {
+                  showToast("No audio tracks found on video element", 'error');
+                  return; 
+              }
           }
           
           const mimeType = getSupportedMimeType(currentMode === 'video' ? 'video' : 'audio');
@@ -451,7 +464,8 @@ const App: React.FC = () => {
               return;
           }
 
-          const recorder = new MediaRecorder(stream, { mimeType });
+          // Pass mimeType to recorder options explicitly
+          const recorder = new MediaRecorder(streamToRecord, { mimeType });
           mediaRecorderRef.current = recorder;
           recordedChunksRef.current = [];
 
@@ -467,18 +481,53 @@ const App: React.FC = () => {
               const mode = recorderModeRef.current || 'video';
               const mimeType = getSupportedMimeType(mode === 'video' ? 'video' : 'audio');
               const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+              
+              // INTERCEPTOR: If an automated Anki recording callback is set, use it and exit.
+              if (ankiRecordingCallbackRef.current) {
+                  await ankiRecordingCallbackRef.current(blob);
+                  // Reset automated recording state
+                  ankiRecordingCallbackRef.current = null;
+                  isRecordingRef.current = false;
+                  setRecorderMode(null);
+                  setRecordingTarget(null);
+                  recordedChunksRef.current = [];
+                  return; 
+              }
+
               const url = URL.createObjectURL(blob);
               
               if (currentTarget?.filename) {
-                  // If we have a target filename (from Anki card), download it directly
-                  downloadBlob(blob, currentTarget.filename);
-                  showToast(t.recordingDownloaded, 'success');
+                  // Save to clips regardless if filename is present, using that filename as title
+                  // This is the logic for "Video recording for Anki": it saves to Clips, not direct download.
+                  const title = currentTarget.filename;
+                  
+                  const newClip: CapturedClip = {
+                      id: crypto.randomUUID(),
+                      type: mode === 'video' ? 'video' : 'audio',
+                      src: url,
+                      title: title,
+                      timestamp: Date.now(),
+                      duration: 0,
+                      blob: blob,
+                      videoId: activeVideoItemRef.current?.id
+                  };
+                  
+                  try {
+                      await saveClip(newClip);
+                      setCapturedClips(prev => [newClip, ...prev]);
+                      showToast(`${t.clipSaved}: ${title}`, 'success');
+                  } catch (e) {
+                      console.error("Failed to save clip", e);
+                      showToast(t.clipFailed, 'error');
+                  }
+
               } else {
-                  // Otherwise save to clips list and DB
+                  // Standard manual recording without specific filename
                   const titleTime = formatTime(playerRef.current?.getCurrentTime() || 0);
+                  // FIX: Use .weba for audio files to distinguish them in the local list, but careful with Anki
+                  const ext = mode === 'video' ? 'webm' : 'weba';
                   let title = `${mode === 'video' ? 'Video' : 'Audio'} ${titleTime}`;
 
-                  // Use loop points if available for title
                   if (currentTarget) {
                       title = `${mode === 'video' ? 'Video' : 'Audio'} Clip ${formatTime(currentTarget.start)} - ${formatTime(currentTarget.end)}`;
                   }
@@ -514,7 +563,10 @@ const App: React.FC = () => {
 
           recorder.start(100); // 100ms slices
           isRecordingRef.current = true;
-          showToast(t.recording, 'info');
+          // Don't show toast if it is for Anki automated flow (it might be too verbose if already shown)
+          if (!ankiRecordingCallbackRef.current) {
+              showToast(t.recording, 'info');
+          }
       } catch (e) {
           console.error("Recording failed", e);
           showToast(t.recordingFailed, 'error');
@@ -870,9 +922,16 @@ const App: React.FC = () => {
   ) => {
       setIsAddingToAnki(true);
       try {
-          // Capture Image
+          // Force pause to ensure clean state
+          setIsPlaying(false);
+          
+          // Capture Image: Use ReactPlayer's internal player logic
           const videoEl = playerRef.current?.getInternalPlayer() as HTMLVideoElement;
           const imageData = captureVideoFrame(videoEl);
+          
+          if (!imageData && isScreenshot) {
+              showToast(t.ocrErrorCORS || "Screenshot failed", 'error');
+          }
           
           // Determine Timings
           let start = Math.max(0, playedSeconds - 2);
@@ -887,10 +946,25 @@ const App: React.FC = () => {
           // If manual sentence passed (e.g. from Dict), use it. Otherwise try to find subtitle text.
           const finalSentence = sentence || getActiveSubtitleText(subtitles, playedSeconds) || "";
           
+          // --- HIGHLIGHTING LOGIC START ---
+          let processedSentence = finalSentence;
+          if (term && finalSentence) {
+             try {
+                 // Escape special regex characters in the term to prevent errors
+                 const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                 // Create a case-insensitive, global regex to replace occurrences with bold tags
+                 const regex = new RegExp(`(${escapedTerm})`, 'gi');
+                 processedSentence = finalSentence.replace(regex, '<b>$1</b>');
+             } catch(e) {
+                 console.warn("Failed to highlight term in sentence", e);
+             }
+          }
+          // --- HIGHLIGHTING LOGIC END ---
+          
           const noteData: AnkiNoteData = {
               word: term,
               definition: definition,
-              sentence: finalSentence,
+              sentence: processedSentence,
               translation: translation || getActiveSubtitleText(secondarySubtitles, playedSeconds) || "",
               imageData: imageData,
               audioStart: start,
@@ -902,8 +976,12 @@ const App: React.FC = () => {
           setAnkiModalMode(isScreenshot || initialMasks ? 'occlusion' : 'standard'); // Decide mode
           
           if (autoOpen) {
+              // 1. Close Dictionary Panels & Pause Video immediately
+              setDictOpen(false);
+              setActiveFullscreenPanel('none');
+              
+              // 2. Open Anki Modal
               setIsAnkiModalOpen(true);
-              if (isPlaying) setIsPlaying(false);
           }
 
       } catch (e) {
@@ -915,7 +993,7 @@ const App: React.FC = () => {
   };
 
   const handleWordClick = (segment: string, fullText: string, segments: string[], nextIndex: number) => {
-    // Save state and pause. Use a separate ref for dictionary resume to not conflict with seek resume.
+    // Save state and pause. Use a separate ref for dictionary resume to not conflict with seek logic.
     dictResumeRef.current = isPlaying;
     if (isPlaying) setIsPlaying(false);
     
@@ -1122,61 +1200,6 @@ const App: React.FC = () => {
           }
       }
   };
-
-  // --- OCR Shutter Interaction Logic ---
-  
-  const handleShutterDrag = (e: React.MouseEvent | React.TouchEvent, type: 'top' | 'bottom' | 'left' | 'right') => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      if (!ocrWrapperRef.current) return;
-      
-      // Use the wrapper (image) dimensions for logic to ensure % matches actual image crop
-      const rect = ocrWrapperRef.current.getBoundingClientRect();
-      const isVertical = type === 'top' || type === 'bottom';
-      
-      const handleMove = (ev: MouseEvent | TouchEvent) => {
-          const clientY = getEventY(ev);
-          const clientX = 'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-          
-          if (isVertical) {
-              // Percentage from top
-              const percentY = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
-              
-              setOcrBounds(prev => {
-                  if (type === 'top') {
-                      return { ...prev, top: Math.min(percentY, prev.bottom - 5) };
-                  } else {
-                      return { ...prev, bottom: Math.max(percentY, prev.top + 5) };
-                  }
-              });
-          } else {
-              // Percentage from left
-              const percentX = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-              
-              setOcrBounds(prev => {
-                  if (type === 'left') {
-                      return { ...prev, left: Math.min(percentX, prev.right - 5) };
-                  } else {
-                      return { ...prev, right: Math.max(percentX, prev.left + 5) };
-                  }
-              });
-          }
-      };
-
-      const handleUp = () => {
-          window.removeEventListener('mousemove', handleMove);
-          window.removeEventListener('mouseup', handleUp);
-          window.removeEventListener('touchmove', handleMove);
-          window.removeEventListener('touchend', handleUp);
-      };
-
-      window.addEventListener('mousemove', handleMove);
-      window.addEventListener('mouseup', handleUp);
-      window.addEventListener('touchmove', handleMove, { passive: false });
-      window.addEventListener('touchend', handleUp);
-  };
-
 
   // 3. Process OCR on selected crop
   const executeOcr = async () => {
@@ -1487,95 +1510,172 @@ const App: React.FC = () => {
   }, [abLoopState, loopA, ankiConfig.abButtonMode, handleStartRecording, handleStopRecording, showToast]);
 
   const handleConfirmAddNote = async (noteData: AnkiNoteData) => {
-      // 1. Store Media Files (Image)
-      let imageFilename = '';
-      if (noteData.imageData) {
-          imageFilename = `vam_${Date.now()}.jpg`;
-          try {
-              await ankiService.storeMediaFile(imageFilename, noteData.imageData);
-          } catch (e) {
-              console.error("Failed to store image", e);
-              showToast(t.failedToStoreImage, 'error');
-              return;
-          }
-      }
-
-      // 2. Store Audio
-      let audioFilename = '';
-      if (noteData.includeAudio && activeVideoItem) {
-          audioFilename = `vam_audio_${Date.now()}.wav`;
-          
-          let audioBase64: string | null = null;
-          if (activeVideoItem.file) {
-               audioBase64 = await extractAudioClip(activeVideoItem.file, noteData.audioStart || 0, noteData.audioEnd || 0);
-          } else {
-               console.warn("Audio extraction for streams not fully implemented in this flow without recording.");
-          }
-
-          if (audioBase64) {
-              try {
-                  await ankiService.storeMediaFile(audioFilename, audioBase64);
-              } catch (e) {
-                   console.error("Failed to store audio", e);
-                   showToast(t.failedToStoreAudio, 'error');
-              }
-          } else {
-              audioFilename = ''; // Reset if failed
-          }
-      }
-
-      // 3. Construct Note Fields
-      const fields: Record<string, string> = {};
-      
-      const mapFields = (configFields: any, isIO: boolean) => {
-          // Standard mapping
-          if (!isIO) {
-              if (configFields.word) fields[configFields.word] = noteData.word || '';
-              if (configFields.sentence) fields[configFields.sentence] = noteData.sentence || '';
-              if (configFields.definition) fields[configFields.definition] = noteData.definition || '';
-              if (configFields.translation) fields[configFields.translation] = noteData.translation || '';
-              if (configFields.image && imageFilename) fields[configFields.image] = `<img src="${imageFilename}">`;
-              if (configFields.audio && audioFilename) fields[configFields.audio] = `[sound:${audioFilename}]`;
-          } else {
-              // IO mapping
-              if (configFields.header) fields[configFields.header] = noteData.word || ''; 
-              if (configFields.backExtra) fields[configFields.backExtra] = noteData.definition || '';
-              if (configFields.remarks) fields[configFields.remarks] = noteData.remarks || '';
-              if (configFields.image && imageFilename) fields[configFields.image] = `<img src="${imageFilename}">`;
-              if (configFields.audio && audioFilename) fields[configFields.audio] = `[sound:${audioFilename}]`;
-              
-              if (configFields.mask && noteData.occlusionMasks) {
-                   const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                      ${noteData.occlusionMasks.map((m: any) => `<rect x="${m.x}" y="${m.y}" width="${m.w}" height="${m.h}" fill="#FFEBA2" stroke="none" />`).join('')}
-                   </svg>`;
-                   fields[configFields.mask] = svg;
-              }
-          }
-      };
+      // 1. Close Modal Immediately
+      setIsAnkiModalOpen(false);
 
       const isIO = ankiModalMode === 'occlusion';
-      const deckName = isIO ? ankiConfig.imageOcclusion.deck : ankiConfig.deck;
-      const modelName = isIO ? ankiConfig.imageOcclusion.model : ankiConfig.model;
-      const configFields = isIO ? ankiConfig.imageOcclusion.fields : ankiConfig.fields;
-      const tags = isIO ? ankiConfig.imageOcclusion.tags : ankiConfig.tags;
+      const configFields = (isIO ? ankiConfig.imageOcclusion.fields : ankiConfig.fields) as any;
 
-      mapFields(configFields, isIO);
+      // Generate filenames for potential recordings
+      const timestamp = Date.now();
+      const videoFilename = `vam_video_${timestamp}.webm`;
+      // Revert to .webm to prevent AnkiConnect renaming to .bin
+      const audioFilename = `vam_audio_${timestamp}.webm`;
 
-      const note = {
-          deckName: deckName,
-          modelName: modelName,
-          fields: fields,
-          tags: tags || []
+      // Helper to construct and send the note
+      const executeNoteCreation = async (audioBlob?: Blob) => {
+          // Validate IO Fields
+          if (isIO) {
+              if (!configFields.image || !configFields.mask) {
+                  showToast("Error: Image or Mask field not mapped in Settings!", 'error');
+                  return;
+              }
+          }
+
+          // A. Store Image (if present)
+          let imageRef = '';
+          if (noteData.imageData) {
+              const imageFilename = `vam_img_${timestamp}.jpg`;
+              try {
+                  // FIX: Capture the ACTUAL filename returned by AnkiConnect
+                  const storedImageName = await ankiService.storeMediaFile(imageFilename, noteData.imageData);
+                  imageRef = `<img src="${storedImageName || imageFilename}">`;
+              } catch (e) {
+                  console.error("Failed to store image", e);
+                  showToast(t.failedToStoreImage, 'error');
+                  return;
+              }
+          }
+
+          // B. Store Audio (if audio blob provided from interceptor)
+          let audioRef = '';
+          if (audioBlob) {
+               try {
+                   const audioBase64 = await blobToBase64(audioBlob);
+                   // FIX: Capture the ACTUAL filename returned by AnkiConnect
+                   const storedAudioName = await ankiService.storeMediaFile(audioFilename, audioBase64);
+                   audioRef = `[sound:${storedAudioName || audioFilename}]`;
+               } catch (e) {
+                   console.error("Failed to store audio", e);
+                   showToast(t.failedToStoreAudio, 'error');
+               }
+          }
+
+          // C. Handle Video Field (Text Reference Only)
+          // If video recording is requested, we insert the [sound:...] tag assuming the user will import the file later.
+          let videoRef = '';
+          if (noteData.includeVideo && activeVideoItem) {
+              // We use [sound:...] format so Anki plays it if the file exists in collection.media
+              // For video, we don't upload here (it's too big), so we rely on the intended filename.
+              // Note: If user manually imports, they must ensure filename matches or update the card.
+              videoRef = `[sound:${videoFilename}]`;
+          }
+
+          // D. Map Fields
+          const fields: Record<string, string> = {};
+          
+          const mapFields = () => {
+              if (!isIO) {
+                  // Standard
+                  if (configFields.word) fields[configFields.word] = noteData.word || '';
+                  if (configFields.sentence) fields[configFields.sentence] = noteData.sentence || '';
+                  if (configFields.definition) fields[configFields.definition] = noteData.definition || '';
+                  if (configFields.translation) fields[configFields.translation] = noteData.translation || '';
+                  if (configFields.image && imageRef) fields[configFields.image] = imageRef;
+                  if (configFields.audio && audioRef) fields[configFields.audio] = audioRef;
+                  if (configFields.video && videoRef) fields[configFields.video] = videoRef;
+              } else {
+                  // Image Occlusion
+                  if (configFields.header) fields[configFields.header] = noteData.word || ''; 
+                  if (configFields.backExtra) fields[configFields.backExtra] = noteData.definition || '';
+                  if (configFields.remarks) fields[configFields.remarks] = noteData.remarks || '';
+                  if (configFields.image && imageRef) fields[configFields.image] = imageRef;
+                  if (configFields.audio && audioRef) fields[configFields.audio] = audioRef;
+                  if (configFields.id) fields[configFields.id] = crypto.randomUUID(); 
+              }
+          };
+
+          const deckName = isIO ? ankiConfig.imageOcclusion.deck : ankiConfig.deck;
+          const modelName = isIO ? ankiConfig.imageOcclusion.model : ankiConfig.model;
+          const tags = isIO ? ankiConfig.imageOcclusion.tags : ankiConfig.tags;
+
+          mapFields();
+
+          // Handle Mask Field: Text-based Image Occlusion format
+          if (isIO && configFields.mask && noteData.occlusionMasks && noteData.occlusionMasks.length > 0) {
+               const maskStrings = noteData.occlusionMasks.map((m: any, index: number) => {
+                   // Convert percentages (0-100) to unit interval (0-1), dropping leading zero if present for compactness
+                   const formatVal = (val: number) => (val / 100).toFixed(6).replace(/^0\./, '.');
+                   
+                   const l = formatVal(m.x);
+                   const t = formatVal(m.y);
+                   const w = formatVal(m.w);
+                   const h = formatVal(m.h);
+                   const cIndex = index + 1; // 1-based index for clozes
+                   
+                   // Format: {{c1::image-occlusion:rect:left=.1568:top=.4364:width=.576:height=.2408:oi=1}}
+                   return `{{c${cIndex}::image-occlusion:rect:left=${l}:top=${t}:width=${w}:height=${h}:oi=1}}`;
+               });
+               
+               // Join with spaces or newlines? Usually purely adjacent or spaces.
+               fields[configFields.mask] = maskStrings.join('');
+          }
+
+          const note = {
+              deckName: deckName,
+              modelName: modelName,
+              fields: fields,
+              tags: tags || []
+          };
+
+          try {
+              await ankiService.addNote(note);
+              showToast(t.noteAdded, 'success');
+              
+              // E. Trigger Video Recording (if requested) AFTER note is created
+              if (noteData.includeVideo && activeVideoItem) {
+                  // We need to trigger the recorder to save the clip locally with the filename we just referenced
+                  const start = noteData.audioStart || 0;
+                  const end = noteData.audioEnd || (start + 5);
+                  
+                  // Use a small delay to ensure UI is responsive
+                  setTimeout(() => {
+                      handleTriggerRecording('video', start, end, videoFilename);
+                  }, 500);
+              }
+
+          } catch (e: any) {
+              console.error(e);
+              showToast(`${t.ankiError}: ${e.message}`, 'error');
+          }
       };
 
-      try {
-          await ankiService.addNote(note);
-          showToast(t.noteAdded, 'success');
-          setIsAnkiModalOpen(false);
-      } catch (e: any) {
-          console.error(e);
-          showToast(`${t.ankiError}: ${e.message}`, 'error');
+      // 2. Decide Flow based on Audio/Video Selection
+      
+      // Case A: Include Audio
+      if (noteData.includeAudio && activeVideoItem) {
+          if (!configFields.audio) {
+              showToast("Warning: Audio field not mapped in settings. Skipping audio.", 'info');
+              await executeNoteCreation(undefined);
+              return;
+          }
+
+          showToast(t.recording || "Recording audio segment...", 'info');
+
+          // Intercept the recording callback to handle the blob directly
+          ankiRecordingCallbackRef.current = async (recordedBlob: Blob) => {
+               await executeNoteCreation(recordedBlob);
+          };
+
+          const start = noteData.audioStart || 0;
+          const end = noteData.audioEnd || (start + 5);
+          
+          handleTriggerRecording('audio', start, end);
+          return;
       }
+
+      // Case B: No Audio (Video Only or Image Only)
+      await executeNoteCreation(undefined);
   };
 
   const handleRetakeImage = () => {
@@ -1653,14 +1753,18 @@ const App: React.FC = () => {
       showToast(t.bookmarkAdded, 'success');
   };
 
-  const handleTriggerRecording = (type: 'video' | 'audio', start: number, end: number) => {
+  const handleTriggerRecording = (type: 'video' | 'audio', start: number, end: number, specificFilename?: string) => {
       if (!playerRef.current) return;
       
-      setRecordingTarget({ start, end, filename: `${type}_${Date.now()}.${type === 'video' ? 'webm' : 'wav'}` }); 
+      // Use .weba for audio container to distinguish it locally, but Anki logic uses specificFilename override
+      const ext = type === 'video' ? 'webm' : 'weba';
+      const filename = specificFilename || `${type}_${Date.now()}.${ext}`;
+      setRecordingTarget({ start, end, filename }); 
       setRecorderMode(type);
       playerRef.current.seekTo(start, 'seconds');
       setIsPlaying(true);
       
+      // Delay recording start to allow seek to finish
       setTimeout(() => {
           handleStartRecording(type);
       }, 500); 
@@ -1685,334 +1789,42 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <header className={`w-full flex justify-between items-center px-4 md:px-6 py-2 bg-[#0f172a]/80 backdrop-blur-md border-b border-white/10 z-50 h-[60px] ${isFullscreen ? 'hidden' : ''}`}>
-         <div className="flex items-center gap-4">
-            {viewMode === 'player' ? (
-                <>
-                    <button onClick={handleBackToLibrary} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-white/5 px-3 py-1.5 rounded-full">
-                        <ChevronLeft size={18} />
-                    </button>
-                    <span className="text-white font-bold truncate max-w-[200px] md:max-w-md">{activeVideoItem?.title}</span>
-                </>
-            ) : (
-                <h1 className="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">VAMplayer</h1>
-            )}
-         </div>
-         <div className="flex items-center gap-2 md:gap-4">
-             
-             {/* Global Top Controls */}
-             {ankiConfig.ocrEnabled && (
-                <button 
-                    onClick={toggleOcrMode} 
-                    className={`p-2.5 rounded-full transition-all flex items-center justify-center ${ocrMode === 'dictionary' ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white'}`}
-                    title={ocrMode === 'standard' ? t.ocrModeStandard : t.ocrModeDictionary}
-                >
-                    {ocrMode === 'dictionary' ? <Zap size={20} className="fill-current"/> : <ScanText size={20} />}
-                </button>
-             )}
+      <Header 
+        viewMode={viewMode}
+        onBackToLibrary={handleBackToLibrary}
+        activeVideoItem={activeVideoItem}
+        ankiConfig={ankiConfig}
+        ocrMode={ocrMode}
+        onToggleOcrMode={toggleOcrMode}
+        capturedClips={capturedClips}
+        showClipsList={showClipsList}
+        onToggleClipsList={() => setShowClipsList(!showClipsList)}
+        onCloseClipsList={() => setShowClipsList(false)}
+        onPlayClip={setPlaybackClip}
+        onDeleteClip={handleDeleteClip}
+        mediaType={mediaType}
+        setMediaType={setMediaType}
+        onOpenSettings={() => setShowSettings(true)}
+        isFullscreen={isFullscreen}
+        lang={lang}
+      />
 
-             {viewMode === 'player' && (
-                 <>
-                     {/* Clips Button (Icon Only) */}
-                    <div className="relative">
-                        <button onClick={() => setShowClipsList(!showClipsList)} className="flex items-center gap-2 text-xs font-medium bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition-colors text-slate-300" title={t.clips}>
-                            <Scissors size={16}/>
-                            {capturedClips.length > 0 && (
-                                <span className="bg-primary text-white text-[9px] px-1 rounded-full font-bold">{capturedClips.length}</span>
-                            )}
-                        </button>
-                        {showClipsList && (
-                            <div className="absolute top-full right-0 mt-2 bg-[#1e293b] rounded-xl shadow-2xl border border-white/10 w-80 p-2 z-[60] animate-in fade-in zoom-in-95 max-h-[60vh] flex flex-col">
-                                <h4 className="text-xs font-bold text-white mb-2 px-2 uppercase sticky top-0 bg-[#1e293b] z-10 py-1 flex justify-between items-center">
-                                    <span>{t.clips}</span>
-                                    <button onClick={() => setShowClipsList(false)}><X size={14} className="text-slate-400 hover:text-white"/></button>
-                                </h4>
-                                <div className="overflow-y-auto space-y-1 flex-1 pr-1 custom-scrollbar">
-                                    {capturedClips.length === 0 ? (
-                                        <p className="text-xs text-slate-500 px-2 py-4 text-center">{t.noClips}</p>
-                                    ) : (
-                                        capturedClips.map((clip) => (
-                                            <div key={clip.id} className="p-2 hover:bg-white/10 rounded group border border-transparent hover:border-white/5 transition-all flex items-center gap-3">
-                                                <div 
-                                                    onClick={() => setPlaybackClip(clip)}
-                                                    className="w-12 h-12 bg-black/50 rounded flex items-center justify-center cursor-pointer hover:bg-black/70 flex-shrink-0 relative overflow-hidden"
-                                                >
-                                                    {clip.type === 'video' ? <FileVideo size={20} className="text-slate-400"/> : <FileAudio size={20} className="text-slate-400"/>}
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40">
-                                                        <Play size={16} className="text-white fill-white"/>
-                                                    </div>
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-white font-medium truncate">{clip.title}</p>
-                                                    <p className="text-[10px] text-slate-400 font-mono">{formatTime(clip.duration)}</p>
-                                                </div>
-                                                <button 
-                                                    onClick={() => downloadBlob(clip.blob, clip.title + (clip.type === 'video' ? '.webm' : '.wav'))}
-                                                    className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-green-500/10 rounded"
-                                                    title="Download"
-                                                >
-                                                    <Download size={14} />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDeleteClip(clip.id)}
-                                                    className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded"
-                                                    title={t.deleteClip}
-                                                >
-                                                    <Trash2 size={14}/>
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                 
-                     {/* Media Type Toggle (Icon Only) */}
-                     <button onClick={() => setMediaType(prev => prev === 'video' ? 'audio' : 'video')} className="flex items-center gap-2 text-xs font-medium bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition-colors text-slate-300" title={mediaType === 'video' ? t.videoMode : t.audioMode}>
-                        {mediaType === 'video' ? <FileVideo size={16}/> : <FileAudio size={16}/>}
-                     </button>
-                 </>
-             )}
-             <button onClick={() => setShowSettings(true)} className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-slate-300 hover:text-white transition-colors" title={t.settings}><SettingsIcon size={20} /></button>
-         </div>
-      </header>
-
-      {/* Settings Sidebar */}
-      <div className={`fixed inset-y-0 right-0 w-80 bg-[#0f172a]/95 backdrop-blur-xl border-l border-white/10 shadow-2xl z-[100] transition-transform duration-300 transform ${showSettings ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="flex items-center justify-between p-5 border-b border-white/10">
-              <h3 className="font-semibold text-white flex items-center gap-2"><SettingsIcon size={18} className="text-primary"/> {t.settings}</h3>
-              <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white transition-colors"><X size={22} /></button>
-          </div>
-          <div className="p-5 space-y-4 overflow-y-auto h-[calc(100%-70px)]">
-              
-              {/* Basic Settings */}
-              <details className="group">
-                  <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      <div className="flex items-center gap-2"><Sliders size={14} /> {t.basicSettings}</div>
-                      <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
-                  </summary>
-                  <div className="pl-4 pb-4 space-y-4">
-                      {/* Language */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.language}</label>
-                          <select 
-                            value={lang} 
-                            onChange={(e) => setLang(e.target.value as UILanguage)} 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:border-primary outline-none text-sm"
-                          >
-                              <option value="en">{t.lang_en}</option>
-                              <option value="zh">{t.lang_zh}</option>
-                          </select>
-                      </div>
-                      
-                      {/* Learning Language */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.learningLanguage}</label>
-                          <select 
-                            value={learningLang} 
-                            onChange={(e) => setLearningLang(e.target.value as LearningLanguage)} 
-                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:border-primary outline-none text-sm"
-                          >
-                              {(['en', 'zh', 'ja', 'ru', 'fr', 'es'] as LearningLanguage[]).map(l => (
-                                  <option key={l} value={l}>{t[`lang_${l}`] || l}</option>
-                              ))}
-                          </select>
-                      </div>
-
-                      {/* OCR Settings Group */}
-                      <div>
-                          <label className="flex items-center justify-between cursor-pointer group mb-2">
-                              <span className="text-[10px] text-slate-400 block">{t.enableOcr}</span>
-                              <div className="relative">
-                                  <input 
-                                      type="checkbox" 
-                                      className="sr-only peer"
-                                      checked={!!ankiConfig.ocrEnabled}
-                                      onChange={(e) => setAnkiConfig({...ankiConfig, ocrEnabled: e.target.checked})}
-                                  />
-                                  <div className="w-8 h-4 bg-white/10 rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
-                              </div>
-                          </label>
-                          
-                          {/* OCR Language - Only show if enabled */}
-                          {ankiConfig.ocrEnabled && (
-                            <div className="animate-in fade-in slide-in-from-top-1 duration-200">
-                                <label className="text-[10px] text-slate-400 block mb-1">{t.ocrLang}</label>
-                                <select 
-                                    value={ankiConfig.ocrLang || 'eng'} 
-                                    onChange={(e) => setAnkiConfig({...ankiConfig, ocrLang: e.target.value})}
-                                    className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:border-primary outline-none text-sm"
-                                >
-                                    <option value="eng">English</option>
-                                    <option value="chi_sim">Chinese (Simplified)</option>
-                                    <option value="chi_tra">Chinese (Traditional)</option>
-                                    <option value="jpn">Japanese</option>
-                                    <option value="kor">Korean</option>
-                                    <option value="fra">French</option>
-                                    <option value="spa">Spanish</option>
-                                    <option value="rus">Russian</option>
-                                    <option value="deu">German</option>
-                                </select>
-                            </div>
-                          )}
-                      </div>
-
-                      {/* Search Engine */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.searchEngine}</label>
-                          <select 
-                            value={ankiConfig.searchEngine} 
-                            onChange={(e) => setAnkiConfig({...ankiConfig, searchEngine: e.target.value})}
-                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:border-primary outline-none text-sm"
-                          >
-                              <option value="google">Google</option>
-                              <option value="bing">Bing</option>
-                              <option value="baidu">Baidu</option>
-                              <option value="baidu_baike">Baidu Baike</option>
-                          </select>
-                      </div>
-
-                      {/* AB Button Mode */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.abButtonMode}</label>
-                          <select 
-                            value={ankiConfig.abButtonMode} 
-                            onChange={(e) => setAnkiConfig({...ankiConfig, abButtonMode: e.target.value as ABButtonMode})}
-                            className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-slate-200 focus:border-primary outline-none text-sm"
-                          >
-                              <option value="loop">{t.abModeLoop}</option>
-                              <option value="record">{t.abModeRecord}</option>
-                          </select>
-                      </div>
-                  </div>
-              </details>
-
-              {/* Subtitle Settings */}
-              <details className="group">
-                  <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      <div className="flex items-center gap-2"><Type size={14} /> {t.subtitleSettings}</div>
-                      <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
-                  </summary>
-                  <div className="pl-4 pb-4 space-y-4">
-                      {/* Mode Switcher */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.subtitleModeLabel}</label>
-                          <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
-                              <button 
-                                onClick={() => setAnkiConfig({...ankiConfig, subtitleDisplayMode: 'interactive'})}
-                                className={`flex-1 flex items-center justify-center gap-1.5 text-[10px] py-1.5 rounded-md transition-all ${ankiConfig.subtitleDisplayMode === 'interactive' ? 'bg-primary text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                              >
-                                  <MousePointerClick size={12} /> {t.modeInteractive}
-                              </button>
-                              <button 
-                                onClick={() => setAnkiConfig({...ankiConfig, subtitleDisplayMode: 'selectable'})}
-                                className={`flex-1 flex items-center justify-center gap-1.5 text-[10px] py-1.5 rounded-md transition-all ${ankiConfig.subtitleDisplayMode === 'selectable' ? 'bg-primary text-white font-bold shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                              >
-                                  <TextCursor size={12} /> {t.modeSelectable}
-                              </button>
-                          </div>
-                      </div>
-
-                      {/* Size */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.subtitleSize}</label>
-                          <div className="flex items-center gap-3">
-                              <span className="text-xs text-slate-400 font-mono w-6 text-right">{ankiConfig.subtitleSize}</span>
-                              <input 
-                                type="range" 
-                                min="12"
-                                max="72"
-                                step="1"
-                                value={ankiConfig.subtitleSize} 
-                                onChange={(e) => setAnkiConfig({...ankiConfig, subtitleSize: parseInt(e.target.value) || 24})}
-                                className="flex-1 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all"
-                              />
-                          </div>
-                      </div>
-                      
-                      {/* Margin */}
-                      <div>
-                          <label className="text-[10px] text-slate-400 block mb-1">{t.subtitleBottomMargin}</label>
-                          <div className="flex items-center gap-3">
-                              <span className="text-xs text-slate-400 font-mono w-6 text-right">{ankiConfig.subtitleBottomMargin}</span>
-                              <input 
-                                type="range" 
-                                min="0"
-                                max="200"
-                                step="1"
-                                value={ankiConfig.subtitleBottomMargin} 
-                                onChange={(e) => setAnkiConfig({...ankiConfig, subtitleBottomMargin: parseInt(e.target.value) || 0})}
-                                className="flex-1 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all"
-                              />
-                          </div>
-                      </div>
-                  </div>
-              </details>
-
-              {/* Anki Section */}
-              <details className="group">
-                  <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      <div className="flex items-center gap-2">{t.ankiConfig}</div>
-                      <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
-                  </summary>
-                  <div className="pl-4 pb-4">
-                      <AnkiWidget isConnected={ankiConnected} onConnectCheck={handleAnkiConnect} config={ankiConfig} onConfigChange={setAnkiConfig} lang={lang} />
-                  </div>
-              </details>
-
-              {/* Data Management Section */}
-              <details className="group">
-                  <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                      <div className="flex items-center gap-2"><Database size={14} /> {t.dataManagement}</div>
-                      <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
-                  </summary>
-                  <div className="pl-4 pb-4 space-y-4">
-                      {/* Export */}
-                      <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                          <button 
-                            onClick={handleExportData}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg text-xs font-bold transition-colors mb-1"
-                          >
-                              <Download size={14} /> {t.exportData}
-                          </button>
-                          <p className="text-[10px] text-slate-500 text-center">{t.exportDataDesc}</p>
-                      </div>
-
-                      {/* Import */}
-                      <div className="p-3 bg-white/5 rounded-xl border border-white/5">
-                          <button 
-                            onClick={() => importInputRef.current?.click()}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg text-xs font-bold transition-colors mb-1"
-                          >
-                              <Upload size={14} /> {t.importData}
-                          </button>
-                          <input 
-                              type="file" 
-                              ref={importInputRef} 
-                              className="hidden" 
-                              accept=".json"
-                              onChange={handleImportData}
-                          />
-                          <p className="text-[10px] text-slate-500 text-center">{t.importDataDesc}</p>
-                      </div>
-
-                      {/* Clear Cache */}
-                      <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20">
-                          <button 
-                            onClick={handleClearCache}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-xs font-bold transition-colors mb-1"
-                          >
-                              <Trash2 size={14} /> {t.clearCache}
-                          </button>
-                          <p className="text-[10px] text-red-400/70 text-center">{t.clearCacheDesc}</p>
-                      </div>
-                  </div>
-              </details>
-          </div>
-      </div>
-      
-      {showSettings && <div className="fixed inset-0 bg-black/50 z-[90] backdrop-blur-sm transition-opacity" onClick={() => setShowSettings(false)} />}
+      <SettingsSidebar 
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        lang={lang}
+        setLang={setLang}
+        learningLang={learningLang}
+        setLearningLang={setLearningLang}
+        ankiConfig={ankiConfig}
+        setAnkiConfig={setAnkiConfig}
+        ankiConnected={ankiConnected}
+        onConnectCheck={handleAnkiConnect}
+        onExportData={handleExportData}
+        onImportData={handleImportData}
+        onClearCache={handleClearCache}
+        importInputRef={importInputRef}
+      />
       
       {/* Playback Clip Modal */}
       {playbackClip && (
@@ -2047,8 +1859,8 @@ const App: React.FC = () => {
                 onUpdateLocalVideo={handleUpdateLocalVideo}
             />
         ) : (
-            <div className={mainContainerClasses}>
-                <div ref={playerContainerRef} className={playerWrapperClasses} onMouseMove={handlePlayerMouseMove} onClick={handlePlayerMouseMove} onTouchStart={handlePlayerMouseMove}>
+            <div ref={playerContainerRef} className={mainContainerClasses}>
+                <div className={playerWrapperClasses} onMouseMove={handlePlayerMouseMove} onClick={handlePlayerMouseMove} onTouchStart={handlePlayerMouseMove}>
                     
                     {/* Buffering Indicator */}
                     {isBuffering && (
@@ -2059,9 +1871,9 @@ const App: React.FC = () => {
                     
                     {/* Recording Indicator */}
                     {isRecordingRef.current && (
-                         <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-red-500/80 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-2">
+                         <div className={`absolute top-12 left-1/2 -translate-x-1/2 z-50 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-2 ${recorderModeRef.current === 'audio' ? 'bg-pink-500/80' : 'bg-red-500/80'}`}>
                              <span className="w-2 h-2 bg-white rounded-full"></span>
-                             REC
+                             {recorderModeRef.current === 'audio' ? 'REC AUDIO' : 'REC VIDEO'}
                          </div>
                     )}
 
@@ -2280,86 +2092,35 @@ const App: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* Bottom Controls - More transparent background (from-black/20) */}
-                    <div className={`absolute bottom-0 left-0 right-0 px-4 pt-2 bg-gradient-to-t from-black/20 to-transparent transition-opacity duration-300 flex flex-col gap-2 z-30 ${isControlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-                        {/* Hide progress bar for live streams, only show 'LIVE' badge if desired, or show simplified controls */}
-                        {!isLiveStream && (
-                            <div className="flex items-center gap-4 text-xs font-mono text-slate-300">
-                                <span>{formatTime(playedSeconds)}</span>
-                                <div className="flex-1 min-w-0">
-                                    <input 
-                                        type="range" 
-                                        min={0} 
-                                        max={(duration || 100)} 
-                                        step="any" 
-                                        value={playedSeconds} 
-                                        onMouseDown={handleSeekMouseDown} 
-                                        onChange={handleSeekChange} 
-                                        onMouseUp={handleSeekMouseUp} 
-                                        onTouchStart={handleSeekMouseDown} 
-                                        onTouchEnd={handleSeekMouseUp}
-                                        className={`w-full h-1.5 bg-white/20 rounded-lg appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full transition-all cursor-pointer hover:[&::-webkit-slider-thumb]:scale-150`}
-                                    />
-                                </div>
-                                <span>{formatTime(duration)}</span>
-                            </div>
-                        )}
-                        
-                        {isLiveStream && (
-                             <div className="flex items-center justify-end px-2">
-                                  <div className="flex items-center gap-2">
-                                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                                      <span className="text-red-500 font-bold text-xs tracking-wider">LIVE</span>
-                                  </div>
-                             </div>
-                        )}
-
-                        <div className="flex justify-between items-center relative pb-3">
-                            <div className="flex items-center gap-4 md:gap-6">
-                                <button onClick={togglePlay} className="text-white hover:text-primary transition-colors">
-                                    {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
-                                </button>
-                                <div className="w-px h-6 bg-white/20 mx-1" />
-                                <button onClick={() => jumpToSubtitle(-1)} className="text-slate-300 hover:text-white transition-colors"><SkipBack size={20} /></button>
-                                <button onClick={() => jumpToSubtitle(1)} className="text-slate-300 hover:text-white transition-colors"><SkipForward size={20} /></button>
-                                
-                                <div className="w-px h-6 bg-white/20 mx-1" />
-                                <div className="flex items-center bg-white/10 rounded-lg p-0.5">
-                                    <button 
-                                        onClick={handleABLoopClick} 
-                                        className={`flex items-center gap-1 text-xs font-bold px-2 py-1.5 rounded transition-colors ${abLoopState !== 'none' ? 'bg-primary text-white shadow' : 'text-slate-300 hover:text-white'}`} 
-                                        title={t.abLoop}
-                                    >
-                                        <Repeat size={16} />
-                                        {abLoopState === 'a-set' && <span className="text-[10px]">A-</span>}
-                                        {abLoopState === 'looping' && <span className="text-[10px]">{ankiConfig.abButtonMode === 'loop' ? 'A-B' : 'REC'}</span>}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-4 md:gap-6">
-                                <div className="relative">
-                                    <button onClick={() => setShowSubSettings(!showSubSettings)} className={`text-slate-300 hover:text-white transition-colors ${subtitleOffset !== 0 ? 'text-primary' : ''}`} title={t.subtitleDelay}><Clock size={20} /></button>
-                                    {showSubSettings && (
-                                        <div className="absolute bottom-full right-0 mb-3 bg-[#1e293b] p-3 rounded-lg shadow-xl border border-white/10 w-48 animate-in fade-in zoom-in-95 duration-200">
-                                            <h4 className="text-xs font-semibold text-white mb-2">{t.subtitleDelay}</h4>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => setSubtitleOffset(prev => Math.round((prev - 0.5) * 10) / 10)} className="bg-white/10 hover:bg-white/20 px-2 rounded text-white">-0.5s</button>
-                                                <span className="flex-1 text-center font-mono text-sm text-primary">{subtitleOffset > 0 ? '+' : ''}{subtitleOffset}s</span>
-                                                <button onClick={() => setSubtitleOffset(prev => Math.round((prev + 0.5) * 10) / 10)} className="bg-white/10 hover:bg-white/20 px-2 rounded text-white">+0.5s</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                                <button onClick={cycleSubtitleMode} className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded transition-colors ${subtitleMode === 'both' ? 'bg-primary text-white' : 'bg-white/10 text-slate-300 hover:bg-white/20'}`} title={t.cycleMode}>
-                                    <MessageSquare size={20} />
-                                </button>
-                                <button onClick={() => setSubtitleVisible(!subtitleVisible)} className={`${subtitleVisible ? 'text-primary' : 'text-slate-400'} hover:text-white transition-colors`}><Languages size={20} /></button>
-                                <button onClick={toggleTranscript} className={`${(activeFullscreenPanel === 'transcript' || showTranscript) ? 'text-primary' : 'text-slate-400'} hover:text-white transition-colors`}><List size={20} /></button>
-                                <button onClick={toggleFullscreen} className="text-slate-300 hover:text-white transition-colors">{isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}</button>
-                            </div>
-                        </div>
-                    </div>
+                    <PlayerControls 
+                        isControlsVisible={isControlsVisible}
+                        isLiveStream={isLiveStream}
+                        playedSeconds={playedSeconds}
+                        duration={duration}
+                        onSeekMouseDown={handleSeekMouseDown}
+                        onSeekChange={handleSeekChange}
+                        onSeekMouseUp={handleSeekMouseUp}
+                        isPlaying={isPlaying}
+                        onTogglePlay={togglePlay}
+                        onJumpSubtitle={jumpToSubtitle}
+                        abLoopState={abLoopState}
+                        abButtonMode={ankiConfig.abButtonMode || 'loop'}
+                        onABLoopClick={handleABLoopClick}
+                        showSubSettings={showSubSettings}
+                        setShowSubSettings={setShowSubSettings}
+                        subtitleOffset={subtitleOffset}
+                        setSubtitleOffset={setSubtitleOffset}
+                        subtitleMode={subtitleMode}
+                        onCycleSubtitleMode={cycleSubtitleMode}
+                        subtitleVisible={subtitleVisible}
+                        setSubtitleVisible={setSubtitleVisible}
+                        activeFullscreenPanel={activeFullscreenPanel}
+                        showTranscript={showTranscript}
+                        onToggleTranscript={toggleTranscript}
+                        isFullscreen={isFullscreen}
+                        onToggleFullscreen={toggleFullscreen}
+                        lang={lang}
+                    />
 
                     {isAnkiModalOpen && <AnkiEditModal 
                         isOpen={isAnkiModalOpen} 
@@ -2396,208 +2157,22 @@ const App: React.FC = () => {
 
                     {/* OCR Result & Capture Modal */}
                     {ocrResult !== null && (
-                        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-                            <div className="bg-[#1e293b] rounded-xl w-full max-w-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col max-h-[90vh]">
-                                <div className="flex items-center justify-between p-3 border-b border-white/10 bg-[#0f172a] shrink-0">
-                                    <h3 className="font-bold text-white flex items-center gap-2 text-sm">
-                                        <ScanText size={16} className="text-primary"/> {t.ocrTitle}
-                                    </h3>
-                                    <div className="flex items-center gap-2">
-                                        <button 
-                                            onClick={handleOcrRetake} 
-                                            className="text-xs flex items-center gap-1 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded transition-colors text-slate-300"
-                                        >
-                                            <Camera size={14}/> {t.retakeScreenshot}
-                                        </button>
-                                        <button onClick={() => setOcrResult(null)} className="text-slate-400 hover:text-white ml-1"><X size={18}/></button>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex-1 overflow-y-auto bg-black/20 p-4 space-y-4 min-h-0">
-                                    {/* Top: Image & Shutter Cropper */}
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex justify-between items-center">
-                                            {/* Mode Switcher and Reset Buttons */}
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <div className="flex bg-black/40 rounded-lg p-1 border border-white/10">
-                                                    <button 
-                                                        onClick={() => setOcrEditMode('vertical')}
-                                                        className={`px-3 py-1 text-xs rounded transition-all flex items-center gap-1 ${ocrEditMode === 'vertical' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                                                    >
-                                                        <MoveVertical size={12}/> Height
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => setOcrEditMode('horizontal')}
-                                                        className={`px-3 py-1 text-xs rounded transition-all flex items-center gap-1 ${ocrEditMode === 'horizontal' ? 'bg-primary text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                                                    >
-                                                        <MoveHorizontal size={12}/> Width
-                                                    </button>
-                                                </div>
-
-                                                <div className="w-px h-6 bg-white/10 mx-1 hidden sm:block"></div>
-
-                                                <button 
-                                                    onClick={() => setOcrBounds(prev => ({...prev, top: 0, bottom: 100}))} 
-                                                    className="px-2 py-1.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5 transition-colors text-[10px] flex items-center gap-1"
-                                                    title="Reset Height (0-100%)"
-                                                >
-                                                    <RotateCcw size={12}/> Reset H
-                                                </button>
-                                                <button 
-                                                    onClick={() => setOcrBounds(prev => ({...prev, left: 0, right: 100}))} 
-                                                    className="px-2 py-1.5 rounded bg-white/5 hover:bg-white/10 text-slate-300 border border-white/5 transition-colors text-[10px] flex items-center gap-1"
-                                                    title="Reset Width (0-100%)"
-                                                >
-                                                    <RotateCcw size={12}/> Reset W
-                                                </button>
-                                            </div>
-                                        </div>
-                                        
-                                        <div className="relative w-full bg-black rounded-lg overflow-hidden border border-white/10 shadow-lg select-none flex items-center justify-center bg-checkered min-h-[200px] p-4">
-                                            {/* Wrapper tightly fits the image dimensions */}
-                                            <div ref={ocrWrapperRef} className="relative inline-block max-h-[50vh]">
-                                                <img 
-                                                    ref={ocrImageRef}
-                                                    src={ocrResult.image} 
-                                                    alt="Capture" 
-                                                    className="max-w-full max-h-[50vh] w-auto h-auto block select-none" 
-                                                />
-                                                
-                                                {/* Shutter Overlay Layers - Positioned absolute to wrapper */}
-                                                <div className="absolute inset-0 pointer-events-none touch-none">
-                                                    
-                                                    {/* Top Curtain */}
-                                                    <div 
-                                                        className="absolute top-0 left-0 right-0 bg-black/70 border-b border-white/30 backdrop-blur-[1px] transition-all duration-100"
-                                                        style={{ height: `${ocrBounds.top}%` }}
-                                                    >
-                                                        {/* Top Handle */}
-                                                        {ocrEditMode === 'vertical' && (
-                                                            <div 
-                                                                className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-12 h-6 bg-white/20 hover:bg-primary/80 backdrop-blur rounded-full cursor-ns-resize pointer-events-auto flex items-center justify-center shadow-lg transition-colors z-20"
-                                                                onMouseDown={(e) => handleShutterDrag(e, 'top')}
-                                                                onTouchStart={(e) => handleShutterDrag(e, 'top')}
-                                                            >
-                                                                <div className="w-6 h-1 bg-white/80 rounded-full"></div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Bottom Curtain */}
-                                                    <div 
-                                                        className="absolute bottom-0 left-0 right-0 bg-black/70 border-t border-white/30 backdrop-blur-[1px] transition-all duration-100"
-                                                        style={{ height: `${100 - ocrBounds.bottom}%` }}
-                                                    >
-                                                        {/* Bottom Handle */}
-                                                        {ocrEditMode === 'vertical' && (
-                                                            <div 
-                                                                className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-6 bg-white/20 hover:bg-primary/80 backdrop-blur rounded-full cursor-ns-resize pointer-events-auto flex items-center justify-center shadow-lg transition-colors z-20"
-                                                                onMouseDown={(e) => handleShutterDrag(e, 'bottom')}
-                                                                onTouchStart={(e) => handleShutterDrag(e, 'bottom')}
-                                                            >
-                                                                <div className="w-6 h-1 bg-white/80 rounded-full"></div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Horizontal Shutters (Only visible in horizontal mode) */}
-                                                    {ocrEditMode === 'horizontal' && (
-                                                        <>
-                                                            {/* Left Curtain */}
-                                                            <div 
-                                                                className="absolute bg-black/70 border-r border-white/30 backdrop-blur-[1px] transition-all duration-100"
-                                                                style={{ 
-                                                                    top: `${ocrBounds.top}%`, 
-                                                                    bottom: `${100 - ocrBounds.bottom}%`,
-                                                                    left: 0,
-                                                                    width: `${ocrBounds.left}%`
-                                                                }}
-                                                            >
-                                                                <div 
-                                                                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-6 h-12 bg-white/20 hover:bg-primary/80 backdrop-blur rounded-full cursor-ew-resize pointer-events-auto flex items-center justify-center shadow-lg transition-colors z-20"
-                                                                    onMouseDown={(e) => handleShutterDrag(e, 'left')}
-                                                                    onTouchStart={(e) => handleShutterDrag(e, 'left')}
-                                                                >
-                                                                    <div className="w-1 h-6 bg-white/80 rounded-full"></div>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Right Curtain */}
-                                                            <div 
-                                                                className="absolute bg-black/70 border-l border-white/30 backdrop-blur-[1px] transition-all duration-100"
-                                                                style={{ 
-                                                                    top: `${ocrBounds.top}%`, 
-                                                                    bottom: `${100 - ocrBounds.bottom}%`,
-                                                                    right: 0,
-                                                                    width: `${100 - ocrBounds.right}%`
-                                                                }}
-                                                            >
-                                                                <div 
-                                                                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-12 bg-white/20 hover:bg-primary/80 backdrop-blur rounded-full cursor-ew-resize pointer-events-auto flex items-center justify-center shadow-lg transition-colors z-20"
-                                                                    onMouseDown={(e) => handleShutterDrag(e, 'right')}
-                                                                    onTouchStart={(e) => handleShutterDrag(e, 'right')}
-                                                                >
-                                                                    <div className="w-1 h-6 bg-white/80 rounded-full"></div>
-                                                                </div>
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Result Display - Only shown when active/result exists */}
-                                    {(ocrResult.text || isOcrProcessing) && (
-                                        <div className="flex flex-col animate-in slide-in-from-top-2 fade-in duration-300">
-                                            <div className="bg-[#0f172a] rounded-lg border border-white/5 p-3 flex flex-col relative overflow-hidden group">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2">
-                                                        {t.ocrResult} 
-                                                        <span className="text-[9px] bg-black/20 px-1.5 py-0.5 rounded">{ankiConfig.ocrLang || 'eng'}</span>
-                                                    </span>
-                                                </div>
-                                                
-                                                {isOcrProcessing ? (
-                                                    <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-400 min-h-[4rem]">
-                                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                                        <span className="text-xs">{t.ocrProcessing}</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex-1 overflow-y-auto font-serif text-base leading-relaxed text-slate-200 selection:bg-primary/30 whitespace-pre-wrap h-auto min-h-[4rem] max-h-48 transition-all scrollbar-thin scrollbar-thumb-white/20 pr-1">
-                                                        {renderLine(ocrResult.text || '', true, 'left')}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Footer with Actions */}
-                                <div className="p-3 border-t border-white/10 bg-[#0f172a] flex justify-end gap-2 shrink-0">
-                                    {ocrResult.text && !isOcrProcessing && (
-                                        <button 
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(ocrResult.text || '');
-                                                showToast(t.copied, 'success');
-                                            }}
-                                            className="px-4 py-2 rounded-lg bg-green-600/20 hover:bg-green-600/30 text-green-400 font-bold text-xs flex items-center gap-2 border border-green-600/20 transition-all"
-                                        >
-                                            <Copy size={16}/> {t.copy}
-                                        </button>
-                                    )}
-                                    
-                                    <button 
-                                        onClick={executeOcr}
-                                        disabled={isOcrProcessing}
-                                        className="px-6 py-2 rounded-lg bg-primary hover:bg-primary/80 text-white font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50 transition-all hover:scale-105 active:scale-95"
-                                    >
-                                        {isOcrProcessing ? <Loader2 className="animate-spin" size={16}/> : <ScanText size={16}/>} 
-                                        {t.runOcr}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <OCRModal 
+                            ocrResult={ocrResult}
+                            onClose={() => setOcrResult(null)}
+                            onRetake={handleOcrRetake}
+                            isProcessing={isOcrProcessing}
+                            onExecute={executeOcr}
+                            editMode={ocrEditMode}
+                            setEditMode={setOcrEditMode}
+                            bounds={ocrBounds}
+                            setBounds={setOcrBounds}
+                            imageRef={ocrImageRef}
+                            wrapperRef={ocrWrapperRef}
+                            renderTextContent={renderLine}
+                            lang={lang}
+                            ocrLang={ankiConfig.ocrLang || 'eng'}
+                        />
                     )}
 
                     {isFullscreen && (
