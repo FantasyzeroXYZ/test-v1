@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import { DictionaryResponse, LearningLanguage, UILanguage } from '../types';
 import { Search, Plus, Loader2, BookOpen, X, ArrowRight, Volume2, ExternalLink, PenTool, Globe, Puzzle, Pin } from 'lucide-react';
@@ -66,6 +67,7 @@ const DictionaryPanel: React.FC<Props> = ({
   const prevIsOpen = useRef(isOpen);
   const prevWord = useRef(word);
   const prevLang = useRef(learningLanguage);
+  const scriptContainerRef = useRef<HTMLDivElement>(null); // Ref to capture script content directly
 
   useEffect(() => {
       isMountedRef.current = true;
@@ -201,9 +203,15 @@ const DictionaryPanel: React.FC<Props> = ({
 
       if (activeTab === 'dict' && !customDef && data) {
           definitionToUse = formatDictionaryHTML(data);
-      } else if (activeTab === 'script' && !customDef && scriptHtml) {
-          definitionToUse = scriptHtml; // This is used for the primary 'definition' field in AnkiNoteData
-          scriptHtmlToPass = scriptHtml; // This is passed as the 'scriptHtmlDef' argument
+      } else if (activeTab === 'script' && !customDef) {
+          // Priority: Grab the rendered HTML content if available (to capture scripts that hydrate later)
+          if (scriptContainerRef.current) {
+              scriptHtmlToPass = scriptContainerRef.current.innerHTML;
+          } else if (scriptHtml) {
+              scriptHtmlToPass = scriptHtml; 
+          }
+          // Set primary definition to this as well just in case
+          if (scriptHtmlToPass) definitionToUse = scriptHtmlToPass;
       }
       // The `scriptHtmlToPass` will be prioritized in `App.tsx`'s `addToAnki`
       onAddToAnki(searchTerm, definitionToUse, sentence, scriptHtmlToPass);
@@ -297,7 +305,7 @@ const DictionaryPanel: React.FC<Props> = ({
                     ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20"><BookOpen size={48} strokeWidth={1} /><p className="text-sm mt-4">Type a word to look up</p></div> )}
                 </div>
             )}
-            {activeTab === 'script' && ( <div className="w-full h-full flex flex-col p-4 bg-[#0f172a] text-slate-200">{scriptLoading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.waitingForScript}</span></div> ) : scriptHtml ? ( <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col"><div className="prose prose-invert prose-sm max-w-none text-slate-200 overflow-x-hidden" dangerouslySetInnerHTML={{ __html: scriptHtml }} /></div> ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20 text-center px-4"><Puzzle size={48} strokeWidth={1} /><p className="text-sm mt-4 font-bold">{t.scriptIntegration}</p><p className="text-xs mt-2 max-w-xs">{t.installScriptHint}</p></div> )}</div> )}
+            {activeTab === 'script' && ( <div className="w-full h-full flex flex-col p-4 bg-[#0f172a] text-slate-200">{scriptLoading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.waitingForScript}</span></div> ) : scriptHtml ? ( <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col"><div ref={scriptContainerRef} className="prose prose-invert prose-sm max-w-none text-slate-200 overflow-x-hidden" dangerouslySetInnerHTML={{ __html: scriptHtml }} /></div> ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20 text-center px-4"><Puzzle size={48} strokeWidth={1} /><p className="text-sm mt-4 font-bold">{t.scriptIntegration}</p><p className="text-xs mt-2 max-w-xs">{t.installScriptHint}</p></div> )}</div> )}
             {activeTab === 'web' && ( 
               <div className="w-full h-full flex flex-col bg-white">
                 <a href={searchUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 border-b text-center text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-2">{t.openInBrowser} <ExternalLink size={12} /></a>

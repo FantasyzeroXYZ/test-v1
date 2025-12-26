@@ -68,7 +68,8 @@ export interface AnkiConfig {
   abButtonMode?: ABButtonMode; // 'loop' (3 clicks) or 'record' (2 clicks)
   ocrLang?: string; // Default OCR Language
   ocrEnabled?: boolean; // Default OCR Enabled status
-  keyboardShortcutsEnabled?: boolean; // New: Enable/disable keyboard shortcuts
+  keyboardShortcutsEnabled?: boolean; // Enable/disable keyboard shortcuts
+  keyBindings?: Record<string, string>; // Map action ID to Key string
 }
 
 export interface AnkiNoteData {
@@ -135,7 +136,8 @@ export interface AnkiConnectResponse<T> {
 }
 
 export interface KeyboardShortcut {
-  key: string;
+  id: string; // Unique action ID
+  defaultKey: string;
   description: string;
   global?: boolean; // If true, works outside of player focus
 }

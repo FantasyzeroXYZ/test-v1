@@ -1,10 +1,11 @@
 
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AnkiConfig, UILanguage, LearningLanguage, ABButtonMode, KeyboardShortcut } from '../types';
 import { getTranslation } from '../i18n';
 import AnkiWidget from './AnkiWidget';
-import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2, Keyboard } from 'lucide-react';
+import { DEFAULT_KEY_BINDINGS } from '../App';
+import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2, Keyboard, Edit2 } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -23,27 +24,55 @@ interface Props {
   importInputRef: React.RefObject<HTMLInputElement>;
 }
 
-const KeyboardShortcuts: KeyboardShortcut[] = [
-    { key: 'Space', description: 'shortcutPlayPause' },
-    { key: 'Left Arrow (←)', description: 'shortcutPrevSub' },
-    { key: 'Right Arrow (→)', description: 'shortcutNextSub' },
-    { key: 'D', description: 'shortcutToggleDict' },
-    { key: 'T', description: 'shortcutToggleTranscript' },
-    { key: 'Q', description: 'shortcutQuickCard' },
-    { key: 'M', description: 'shortcutToggleMask' },
-    { key: 'F', description: 'shortcutToggleFullscreen' },
-    { key: 'A', description: 'shortcutSetA' },
-    { key: 'B', description: 'shortcutSetB' },
-    { key: 'C', description: 'shortcutClearAB' },
-    { key: 'O', description: 'shortcutOcr' },
-];
-
 const SettingsSidebar: React.FC<Props> = ({
   isOpen, onClose, lang, setLang, learningLang, setLearningLang,
   ankiConfig, setAnkiConfig, ankiConnected, onConnectCheck,
   onExportData, onImportData, onClearCache, importInputRef
 }) => {
   const t = getTranslation(lang);
+  const [recordingKey, setRecordingKey] = useState<string | null>(null);
+
+  // Handle key recording
+  useEffect(() => {
+    if (!recordingKey) return;
+
+    const handleRecord = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore modifiers if pressed alone (optional, but good UX)
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+
+      const newBindings = { ...ankiConfig.keyBindings };
+      newBindings[recordingKey] = e.code; // Use code for layout independence, or key for char
+      
+      setAnkiConfig({ ...ankiConfig, keyBindings: newBindings });
+      setRecordingKey(null);
+    };
+
+    window.addEventListener('keydown', handleRecord);
+    return () => window.removeEventListener('keydown', handleRecord);
+  }, [recordingKey, ankiConfig, setAnkiConfig]);
+
+  const currentBindings = ankiConfig.keyBindings || DEFAULT_KEY_BINDINGS;
+
+  const resetBindings = () => {
+    if(confirm("Reset all shortcuts to default?")) {
+        setAnkiConfig({ ...ankiConfig, keyBindings: { ...DEFAULT_KEY_BINDINGS } });
+    }
+  };
+
+  const ShortcutRow = ({ action, label }: { action: string, label: string }) => (
+      <li className="flex justify-between items-center text-sm text-slate-300 py-1">
+          <span className="flex-1 text-xs text-slate-400">{label}</span>
+          <button 
+            onClick={() => setRecordingKey(action)}
+            className={`font-mono px-2 py-0.5 rounded-md text-[10px] min-w-[60px] text-center border transition-all ${recordingKey === action ? 'bg-red-500/20 text-red-400 border-red-500 animate-pulse' : 'bg-white/10 text-primary-200 border-transparent hover:border-white/20'}`}
+          >
+             {recordingKey === action ? 'Press key...' : (currentBindings[action] || 'Unbound')}
+          </button>
+      </li>
+  );
 
   return (
     <>
@@ -52,7 +81,7 @@ const SettingsSidebar: React.FC<Props> = ({
               <h3 className="font-semibold text-white flex items-center gap-2"><SettingsIcon size={18} className="text-primary"/> {t.settings}</h3>
               <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors"><X size={22} /></button>
           </div>
-          <div className="p-5 space-y-4 overflow-y-auto h-[calc(100%-70px)]">
+          <div className="p-5 space-y-4 overflow-y-auto h-[calc(100%-70px)] custom-scrollbar">
               
               {/* Basic Settings */}
               <details className="group">
@@ -236,27 +265,38 @@ const SettingsSidebar: React.FC<Props> = ({
                       <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
                   </summary>
                   <div className="pl-4 pb-4 space-y-3">
-                      <label className="flex items-center justify-between cursor-pointer group mb-2">
-                          <span className="text-[10px] text-slate-400 block">{t.enableOcr}</span> {/* Reusing translation for 'enable ocr' as a generic 'enable' */}
-                          <div className="relative">
-                              <input 
-                                  type="checkbox" 
-                                  className="sr-only peer"
-                                  checked={!!ankiConfig.keyboardShortcutsEnabled}
-                                  onChange={(e) => setAnkiConfig({...ankiConfig, keyboardShortcutsEnabled: e.target.checked})}
-                              />
-                              <div className="w-8 h-4 bg-white/10 rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
-                          </div>
-                      </label>
-                      <p className="text-xs text-slate-400">{t.keyboardDesc}</p>
-                      <ul className="space-y-1">
-                          {KeyboardShortcuts.map((shortcut, index) => (
-                              <li key={index} className="flex justify-between items-center text-sm text-slate-300">
-                                  <span className="font-mono bg-white/10 px-2 py-0.5 rounded-md text-primary-200 text-[11px]">{shortcut.key}</span>
-                                  <span className="flex-1 text-right ml-2">{t[shortcut.description as keyof typeof t]}</span>
-                              </li>
-                          ))}
-                      </ul>
+                      <div className="flex justify-between items-center mb-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                              <div className="relative">
+                                  <input 
+                                      type="checkbox" 
+                                      className="sr-only peer"
+                                      checked={!!ankiConfig.keyboardShortcutsEnabled}
+                                      onChange={(e) => setAnkiConfig({...ankiConfig, keyboardShortcutsEnabled: e.target.checked})}
+                                  />
+                                  <div className="w-8 h-4 bg-white/10 rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
+                              </div>
+                              <span className="text-[10px] text-slate-400">{t.enableOcr}</span> {/* Reusing generic 'enable' label */}
+                          </label>
+                          <button onClick={resetBindings} className="text-[10px] text-slate-500 hover:text-white underline">Reset</button>
+                      </div>
+                      
+                      {ankiConfig.keyboardShortcutsEnabled && (
+                          <ul className="space-y-1 bg-black/20 rounded-lg p-2 border border-white/5">
+                              <ShortcutRow action="playPause" label={t.shortcutPlayPause} />
+                              <ShortcutRow action="prevSub" label={t.shortcutPrevSub} />
+                              <ShortcutRow action="nextSub" label={t.shortcutNextSub} />
+                              <ShortcutRow action="toggleDict" label={t.shortcutToggleDict} />
+                              <ShortcutRow action="toggleTranscript" label={t.shortcutToggleTranscript} />
+                              <ShortcutRow action="quickCard" label={t.shortcutQuickCard} />
+                              <ShortcutRow action="toggleMask" label={t.shortcutToggleMask} />
+                              <ShortcutRow action="toggleFullscreen" label={t.shortcutToggleFullscreen} />
+                              <ShortcutRow action="setA" label={t.shortcutSetA} />
+                              <ShortcutRow action="setB" label={t.shortcutSetB} />
+                              <ShortcutRow action="clearLoop" label={t.shortcutClearAB} />
+                              <ShortcutRow action="ocr" label={t.shortcutOcr} />
+                          </ul>
+                      )}
                       <p className="text-xs text-slate-500 italic mt-3 pt-3 border-t border-white/5">{t.gamepadSupport}</p>
                   </div>
               </details>

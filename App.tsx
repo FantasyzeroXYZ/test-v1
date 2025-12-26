@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactPlayer from 'react-player';
 import Tesseract from 'tesseract.js';
@@ -21,6 +22,22 @@ import {
   CheckCircle, AlertCircle, Info, X, Edit2, Trash2, FileAudio, Mic, Video
 } from 'lucide-react';
 
+// Default key bindings
+export const DEFAULT_KEY_BINDINGS: Record<string, string> = {
+    'playPause': ' ',
+    'prevSub': 'ArrowLeft',
+    'nextSub': 'ArrowRight',
+    'toggleDict': 'd',
+    'toggleTranscript': 't',
+    'quickCard': 'q',
+    'toggleMask': 'm',
+    'toggleFullscreen': 'f',
+    'setA': 'a',
+    'setB': 'b',
+    'clearLoop': 'c',
+    'ocr': 'o'
+};
+
 const App: React.FC = () => {
   const [lang, setLang] = useState<UILanguage>('zh');
   const [learningLang, setLearningLang] = useState<LearningLanguage>('en'); 
@@ -37,7 +54,14 @@ const App: React.FC = () => {
   const [isSeeking, setIsSeeking] = useState(false); 
   const [isBuffering, setIsBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isWideScreen, setIsWideScreen] = useState(false); 
+  
+  // Fix Flash: Initialize based on current window size immediately
+  const [isWideScreen, setIsWideScreen] = useState(() => {
+      if (typeof window !== 'undefined') {
+          return window.matchMedia('(min-width: 768px)').matches;
+      }
+      return false;
+  }); 
   
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [secondarySubtitles, setSecondarySubtitles] = useState<Subtitle[]>([]);
@@ -122,7 +146,8 @@ const App: React.FC = () => {
     abButtonMode: 'loop',
     ocrLang: 'eng',
     ocrEnabled: false,
-    keyboardShortcutsEnabled: true // Default to true
+    keyboardShortcutsEnabled: true,
+    keyBindings: { ...DEFAULT_KEY_BINDINGS }
   });
 
   const playerRef = useRef<any>(null);
@@ -283,6 +308,8 @@ const App: React.FC = () => {
           if (!config.ocrLang) config.ocrLang = 'eng';
           if (typeof config.ocrEnabled === 'undefined') config.ocrEnabled = false;
           if (typeof config.keyboardShortcutsEnabled === 'undefined') config.keyboardShortcutsEnabled = true; // Default to true
+          // Ensure keyBindings exists and merge with default in case new keys were added in code updates
+          config.keyBindings = { ...DEFAULT_KEY_BINDINGS, ...(config.keyBindings || {}) };
           setAnkiConfig(config);
       }
       const savedLang = localStorage.getItem('vam_ui_lang');
@@ -1487,59 +1514,72 @@ const App: React.FC = () => {
   // --- Keyboard Shortcuts Effect ---
   useEffect(() => {
     if (!ankiConfig.keyboardShortcutsEnabled) {
-      return; // If shortcuts are disabled, don't register listeners
+      return; 
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent default browser actions for common keys if we handle them
       const isHandledKey = [' ', 'ArrowLeft', 'ArrowRight', 'd', 't', 'q', 'm', 'f', 'a', 'b', 'c', 'o'].includes(e.key.toLowerCase());
       if (isHandledKey && e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
-          // Allow default behavior for input fields
           return;
       }
 
-      if (isHandledKey) {
+      // Check against custom key bindings
+      const keyBindings = ankiConfig.keyBindings || DEFAULT_KEY_BINDINGS;
+      const currentKey = e.key.toLowerCase();
+      const currentCode = e.code;
+      
+      // Helper to find action by key
+      const findAction = (k: string) => {
+          return Object.keys(keyBindings).find(action => {
+              const boundKey = keyBindings[action].toLowerCase();
+              return boundKey === k || boundKey === currentCode.toLowerCase();
+          });
+      };
+
+      const action = findAction(currentKey);
+
+      if (action) {
         e.preventDefault();
-        e.stopPropagation(); // Stop event propagation to prevent multiple triggers
+        e.stopPropagation();
       }
 
-      switch (e.key.toLowerCase()) {
-        case ' ': // Play/Pause
+      switch (action) {
+        case 'playPause': 
           togglePlay();
           break;
-        case 'arrowleft': // Previous Subtitle
+        case 'prevSub': 
           jumpToSubtitle(-1);
           break;
-        case 'arrowright': // Next Subtitle
+        case 'nextSub': 
           jumpToSubtitle(1);
           break;
-        case 'd': // Toggle Dictionary
+        case 'toggleDict': 
           if (isFullscreen) {
             setActiveFullscreenPanel(prev => prev === 'dictionary' ? 'none' : 'dictionary');
           } else {
             setDictOpen(prev => !prev);
           }
           break;
-        case 't': // Toggle Transcript
+        case 'toggleTranscript': 
           toggleTranscript();
           break;
-        case 'q': // Quick Anki Card
+        case 'quickCard': 
           handleQuickCard();
           break;
-        case 'm': // Toggle Mask
+        case 'toggleMask': 
           setShowMask(prev => !prev);
           break;
-        case 'f': // Toggle Fullscreen
+        case 'toggleFullscreen': 
           toggleFullscreen();
           break;
-        case 'a': // Set AB Loop A
+        case 'setA': 
           if (ankiConfig.abButtonMode === 'loop') {
             const currentTime = playerRef.current?.getCurrentTime() || 0;
             if (abLoopState === 'none') {
               setLoopA(currentTime);
               setAbLoopState('a-set');
               showToast(t.pointASet, 'info');
-            } else if (abLoopState === 'looping') { // If already looping, clear it
+            } else if (abLoopState === 'looping') { 
               setAbLoopState('none');
               setLoopA(0);
               setLoopB(0);
@@ -1547,7 +1587,7 @@ const App: React.FC = () => {
             }
           }
           break;
-        case 'b': // Set AB Loop B / Record Stop
+        case 'setB': 
           if (ankiConfig.abButtonMode === 'loop') {
             const currentTime = playerRef.current?.getCurrentTime() || 0;
             if (abLoopState === 'a-set' && currentTime > loopA) {
@@ -1555,7 +1595,7 @@ const App: React.FC = () => {
               setAbLoopState('looping');
               showToast(t.loopingAB, 'info');
               playerRef.current?.seekTo(loopA, 'seconds');
-            } else if (abLoopState === 'looping') { // If already looping, clear it
+            } else if (abLoopState === 'looping') { 
               setAbLoopState('none');
               setLoopA(0);
               setLoopB(0);
@@ -1572,7 +1612,7 @@ const App: React.FC = () => {
             }
           }
           break;
-        case 'c': // Clear AB Loop (if in loop mode)
+        case 'clearLoop': 
           if (abLoopState !== 'none') {
             setAbLoopState('none');
             setLoopA(0);
@@ -1580,7 +1620,7 @@ const App: React.FC = () => {
             showToast(t.loopCleared, 'info');
           }
           break;
-        case 'o': // Perform OCR
+        case 'ocr': 
           if (ankiConfig.ocrEnabled) {
             handleOcrClick();
           }
@@ -1597,6 +1637,7 @@ const App: React.FC = () => {
     };
   }, [
     ankiConfig.keyboardShortcutsEnabled,
+    ankiConfig.keyBindings,
     isPlaying, togglePlay,
     abLoopState, loopA, loopB,
     handleStartRecording, handleStopRecording,
