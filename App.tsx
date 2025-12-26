@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactPlayer from 'react-player';
 import Tesseract from 'tesseract.js';
@@ -515,7 +516,7 @@ const App: React.FC = () => {
            setIsPlaying(false);
            return;
       }
-      if (abLoopState === 'looping' && time >= (loopB - 0.05)) {
+      if (abLoopState === 'looping' && time >= (loopB - 0.05)) { // Added a small buffer to ensure loop restarts before exact B
           playerRef.current.seekTo(loopA, 'seconds');
           setPlayedSeconds(loopA);
           return;
@@ -599,6 +600,10 @@ const App: React.FC = () => {
     seekLockRef.current = true;
     setIsSeeking(false);
     if (playerRef.current) playerRef.current.seekTo(time, 'seconds');
+    // Ensure that after seeking, the next subtitle jump starts from the new position
+    const index = subtitles.findIndex(s => time >= (s.start + subtitleOffset) && time <= (s.end + subtitleOffset));
+    if (index !== -1) setCurrentSubtitleIndex(index);
+    
     setTimeout(() => {
       if (wasPlayingRef.current) setIsPlaying(true);
       setTimeout(() => seekLockRef.current = false, 800);
@@ -795,7 +800,8 @@ const App: React.FC = () => {
       audio?: string,
       autoOpen: boolean = true,
       isScreenshot: boolean = false,
-      initialMasks?: any[]
+      initialMasks?: any[],
+      scriptHtmlDef?: string // New parameter for script HTML definition
   ) => {
       setIsAddingToAnki(true);
       try {
@@ -824,7 +830,7 @@ const App: React.FC = () => {
           }
           const noteData: AnkiNoteData = {
               word: term,
-              definition: definition,
+              definition: scriptHtmlDef || definition, // Use scriptHtmlDef if provided
               sentence: processedSentence,
               translation: translation || getActiveSubtitleText(secondarySubtitles, playedSeconds) || "",
               imageData: imageData,
@@ -912,11 +918,13 @@ const App: React.FC = () => {
     let targetIndex;
     
     if (offset > 0) {
+        // Find the next subtitle after current time (with a small buffer)
         targetIndex = subtitles.findIndex(s => (s.start + subtitleOffset) > (currentTime + 0.1));
-        if (targetIndex === -1) targetIndex = subtitles.length - 1;
+        if (targetIndex === -1) targetIndex = subtitles.length - 1; // If no next, go to last
     } else {
-        const reversedIndex = [...subtitles].reverse().findIndex(s => (s.start + subtitleOffset) < (currentTime - 0.5));
-        targetIndex = reversedIndex === -1 ? 0 : subtitles.length - 1 - reversedIndex;
+        // Find the previous subtitle before current time (with a small buffer)
+        const reversedIndex = [...subtitles].reverse().findIndex(s => (s.start + subtitleOffset) < (currentTime - 0.1)); // Changed 0.5 to 0.1 for faster prev
+        targetIndex = reversedIndex === -1 ? 0 : subtitles.length - 1 - reversedIndex; // If no prev, go to first
     }
 
     const sub = subtitles[targetIndex];
@@ -1116,9 +1124,21 @@ const App: React.FC = () => {
   const isSubtitleActive = (getActiveSubtitleText(subtitles, playedSeconds) || getActiveSubtitleText(secondarySubtitles, playedSeconds));
   const mainContainerClasses = viewMode === 'library' ? "w-full max-w-7xl px-4 md:px-6 py-6" : "w-full h-full overflow-hidden bg-black"; 
   const playerWrapperClasses = isFullscreen ? "flex items-center justify-center bg-black overflow-hidden relative w-full h-full" : "w-full h-full relative group bg-black";
-  const controlBarHeightEstimate = (isControlsVisible && !isFullscreen) ? 85 : 0;
+  
+  // Estimate height of player controls when visible
+  // For non-fullscreen, the PlayerControls div is relative to the bottom of the video,
+  // so the estimate already accounts for the absolute position.
+  // For fullscreen, it's relative to the bottom of the entire screen.
+  // PlayerControls has pb-3 (12px), range input (~24px), main controls (~40px)
+  const fullscreenControlsHeight = 70; // Adjusted based on player controls height
+  const nonFullscreenControlsHeight = 85; // Roughly the height of controls including progress bar and padding
+
+  const actualControlBarHeight = isControlsVisible 
+    ? (isFullscreen ? fullscreenControlsHeight : nonFullscreenControlsHeight) 
+    : 0;
+    
   const subtitleBottomStyle = {
-      bottom: isFullscreen ? '10%' : `${ankiConfig.subtitleBottomMargin + controlBarHeightEstimate}px`
+      bottom: `${ankiConfig.subtitleBottomMargin + actualControlBarHeight}px`
   };
 
   const saveMaskConfig = async (top: number, height: number) => {
@@ -1629,7 +1649,7 @@ const App: React.FC = () => {
                             </div>
                         )}
                         {subtitleVisible && isSubtitleActive && (
-                            <div className={`absolute left-4 right-4 text-center pointer-events-auto transition-all duration-300 z-30 flex justify-center`} style={subtitleBottomStyle}>
+                            <div className={`absolute left-4 right-4 text-center pointer-events-auto transition-all duration-300 z-40 flex justify-center`} style={subtitleBottomStyle}>
                                 {renderCurrentSubtitles()}
                             </div>
                         )}
@@ -1657,7 +1677,7 @@ const App: React.FC = () => {
                     {isFullscreen && (
                         <>
                             <DictionaryPanel 
-                                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} 
+                                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence, scriptHtmlDef) => addToAnki(term, def, sentence, undefined, undefined, true, false, undefined, scriptHtmlDef)} isAddingToAnki={isAddingToAnki} 
                                 isOpen={activeFullscreenPanel === 'dictionary'} onClose={handleDictClose} variant="sidebar" 
                                 learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length}
                                 lang={lang} searchEngine={ankiConfig.searchEngine}
@@ -1673,7 +1693,7 @@ const App: React.FC = () => {
       {!isFullscreen && (
         <>
             <DictionaryPanel 
-                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} 
+                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence, scriptHtmlDef) => addToAnki(term, def, sentence, undefined, undefined, true, false, undefined, scriptHtmlDef)} isAddingToAnki={isAddingToAnki} 
                 isOpen={dictOpen} onClose={handleDictClose} variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
                 learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length} 
                 lang={lang} searchEngine={ankiConfig.searchEngine} 

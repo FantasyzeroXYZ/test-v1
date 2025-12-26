@@ -241,6 +241,23 @@ export const translations = {
     failedToStoreImage: "Failed to upload image to Anki",
     failedToStoreAudio: "Failed to store audio",
     ankiError: "Anki Error",
+
+    // Keyboard Shortcuts
+    keyboardShortcuts: "Keyboard Shortcuts",
+    keyboardDesc: "Control playback and features using keyboard or Bluetooth gamepad.",
+    shortcutPlayPause: "Play/Pause",
+    shortcutPrevSub: "Previous Subtitle",
+    shortcutNextSub: "Next Subtitle",
+    shortcutToggleDict: "Toggle Dictionary",
+    shortcutToggleTranscript: "Toggle Transcript",
+    shortcutQuickCard: "Create Quick Anki Card",
+    shortcutToggleMask: "Toggle Mask",
+    shortcutToggleFullscreen: "Toggle Fullscreen",
+    shortcutSetA: "Set AB Loop A",
+    shortcutSetB: "Set AB Loop B / Record Stop",
+    shortcutClearAB: "Clear AB Loop",
+    shortcutOcr: "Perform OCR",
+    gamepadSupport: "Bluetooth gamepads are supported. Map your controller buttons to these keyboard shortcuts for seamless control. (e.g., A/Cross for Play/Pause, L1/R1 for Prev/Next Subtitle).",
   },
   zh: {
     library: "返回库",
@@ -481,6 +498,23 @@ export const translations = {
     failedToStoreImage: "上传图片到 Anki 失败",
     failedToStoreAudio: "存储音频失败",
     ankiError: "Anki 错误",
+
+    // Keyboard Shortcuts
+    keyboardShortcuts: "快捷键设置",
+    keyboardDesc: "使用键盘或蓝牙手柄控制播放和各项功能。",
+    shortcutPlayPause: "播放/暂停",
+    shortcutPrevSub: "上一句字幕",
+    shortcutNextSub: "下一句字幕",
+    shortcutToggleDict: "切换词典面板",
+    shortcutToggleTranscript: "切换字幕列表",
+    shortcutQuickCard: "创建快速 Anki 卡片",
+    shortcutToggleMask: "切换遮幕",
+    shortcutToggleFullscreen: "切换全屏",
+    shortcutSetA: "设置 AB 循环 A点",
+    shortcutSetB: "设置 AB 循环 B点 / 停止录制",
+    shortcutClearAB: "清除 AB 循环",
+    shortcutOcr: "执行 OCR 识别",
+    gamepadSupport: "支持蓝牙手柄。您可以将手柄按键映射到这些快捷键，实现无缝操作。（例如：A/叉键用于播放/暂停，L1/R1 用于上/下句字幕）。",
   }
 };
 

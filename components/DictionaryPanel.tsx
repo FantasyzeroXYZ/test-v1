@@ -10,7 +10,7 @@ interface Props {
   word: string;
   sentence: string;
   learningLanguage: LearningLanguage;
-  onAddToAnki: (term: string, definition: string, sentence?: string) => Promise<void>;
+  onAddToAnki: (term: string, definition: string, sentence?: string, scriptHtmlDef?: string) => Promise<void>;
   onAppendNext?: () => void;
   canAppend: boolean;
   isAddingToAnki: boolean;
@@ -195,6 +195,16 @@ const DictionaryPanel: React.FC<Props> = ({
       }
   };
 
+  const handleAnkiClick = () => {
+      let definitionToUse = customDef;
+      if (activeTab === 'dict' && !customDef && data) {
+          definitionToUse = formatDictionaryHTML(data);
+      } else if (activeTab === 'script' && !customDef && scriptHtml) {
+          definitionToUse = scriptHtml;
+      }
+      onAddToAnki(searchTerm, definitionToUse, sentence);
+  };
+
   const searchUrl = getSearchUrl(searchTerm);
   const isSidebar = variant === 'sidebar';
   const containerClasses = isSidebar
@@ -244,7 +254,7 @@ const DictionaryPanel: React.FC<Props> = ({
                           <button onClick={onAppendNext} className="text-primary-400 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors" title={t.appendNext}><ArrowRight size={18} /></button>
                       )}
                       <button 
-                          onClick={() => { const def = customDef || (data ? formatDictionaryHTML(data) : ''); onAddToAnki(searchTerm, def); }}
+                          onClick={handleAnkiClick}
                           disabled={isAddingToAnki || !searchTerm}
                           className="text-primary-300 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors disabled:opacity-50"
                           title={t.addToAnki}
@@ -276,13 +286,22 @@ const DictionaryPanel: React.FC<Props> = ({
                             {data.entries.map((entry, i) => (
                                 <div key={i} className="mb-8 last:mb-0"><span className="inline-block px-2.5 py-0.5 bg-primary/20 text-primary-200 border border-primary/20 text-[10px] font-bold uppercase rounded-md mb-3 tracking-wide">{entry.partOfSpeech}</span><div className="space-y-4">{entry.senses?.map((sense, j) => ( <div key={j} className="text-sm text-slate-300 pl-4 border-l-2 border-white/10 relative"><p className="leading-relaxed">{sense.definition}</p>{sense.examples?.[0] && ( <p className="text-xs text-slate-500 mt-1.5 italic font-medium">"{sense.examples[0]}"</p> )}</div> ))}</div></div>
                             ))}
-                            <div className="space-y-3 mt-8 pt-6 border-t border-white/10"><h4 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-2"><PenTool size={12}/> {t.customDef}</h4><textarea className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-primary outline-none transition-all placeholder:text-slate-600 min-h-[80px]" placeholder="Manually add or edit definition..." value={customDef} onChange={(e) => setCustomDef(e.target.value)}></textarea></div>
                         </div>
                     ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20"><BookOpen size={48} strokeWidth={1} /><p className="text-sm mt-4">Type a word to look up</p></div> )}
                 </div>
             )}
             {activeTab === 'script' && ( <div className="w-full h-full flex flex-col p-4 bg-[#0f172a] text-slate-200">{scriptLoading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.waitingForScript}</span></div> ) : scriptHtml ? ( <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col"><div className="prose prose-invert prose-sm max-w-none text-slate-200 overflow-x-hidden" dangerouslySetInnerHTML={{ __html: scriptHtml }} /></div> ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20 text-center px-4"><Puzzle size={48} strokeWidth={1} /><p className="text-sm mt-4 font-bold">{t.scriptIntegration}</p><p className="text-xs mt-2 max-w-xs">{t.installScriptHint}</p></div> )}</div> )}
-            {activeTab === 'web' && ( <div className="w-full h-full flex flex-col bg-white"><a href={searchUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 border-b text-center text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-2">{t.openInBrowser} <ExternalLink size={12} /></a><iframe src={searchUrl} className="w-full flex-1 border-0" sandbox="allow-forms allow-scripts allow-same-origin" /></div> )}
+            {activeTab === 'web' && ( 
+              <div className="w-full h-full flex flex-col bg-white">
+                <a href={searchUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 border-b text-center text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-2">{t.openInBrowser} <ExternalLink size={12} /></a>
+                <iframe src={searchUrl} className="w-full flex-1 border-0" sandbox="allow-forms allow-scripts allow-same-origin" />
+                {/* Custom Definition for Web Tab */}
+                <div className="space-y-3 mt-4 pt-4 border-t border-slate-200 bg-slate-50 p-4 shrink-0">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-2"><PenTool size={12}/> {t.customDef}</h4>
+                  <textarea className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-800 focus:border-primary outline-none transition-all placeholder:text-slate-400 min-h-[80px]" placeholder="Manually add or edit definition..." value={customDef} onChange={(e) => setCustomDef(e.target.value)}></textarea>
+                </div>
+              </div> 
+            )}
         </div>
       </div>
     </>

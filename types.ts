@@ -132,3 +132,9 @@ export interface AnkiConnectResponse<T> {
   result: T;
   error: string | null;
 }
+
+export interface KeyboardShortcut {
+  key: string;
+  description: string;
+  global?: boolean; // If true, works outside of player focus
+}

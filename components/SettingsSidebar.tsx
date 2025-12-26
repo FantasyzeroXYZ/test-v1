@@ -1,8 +1,9 @@
+
 import React from 'react';
-import { AnkiConfig, UILanguage, LearningLanguage, ABButtonMode } from '../types';
+import { AnkiConfig, UILanguage, LearningLanguage, ABButtonMode, KeyboardShortcut } from '../types';
 import { getTranslation } from '../i18n';
 import AnkiWidget from './AnkiWidget';
-import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2, Keyboard } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -20,6 +21,21 @@ interface Props {
   onClearCache: () => void;
   importInputRef: React.RefObject<HTMLInputElement>;
 }
+
+const KeyboardShortcuts: KeyboardShortcut[] = [
+    { key: 'Space', description: 'shortcutPlayPause' },
+    { key: 'Left Arrow (←)', description: 'shortcutPrevSub' },
+    { key: 'Right Arrow (→)', description: 'shortcutNextSub' },
+    { key: 'D', description: 'shortcutToggleDict' },
+    { key: 'T', description: 'shortcutToggleTranscript' },
+    { key: 'Q', description: 'shortcutQuickCard' },
+    { key: 'M', description: 'shortcutToggleMask' },
+    { key: 'F', description: 'shortcutToggleFullscreen' },
+    { key: 'A', description: 'shortcutSetA' },
+    { key: 'B', description: 'shortcutSetB' },
+    { key: 'C', description: 'shortcutClearAB' },
+    { key: 'O', description: 'shortcutOcr' },
+];
 
 const SettingsSidebar: React.FC<Props> = ({
   isOpen, onClose, lang, setLang, learningLang, setLearningLang,
@@ -209,6 +225,26 @@ const SettingsSidebar: React.FC<Props> = ({
                   </summary>
                   <div className="pl-4 pb-4">
                       <AnkiWidget isConnected={ankiConnected} onConnectCheck={onConnectCheck} config={ankiConfig} onConfigChange={setAnkiConfig} lang={lang} />
+                  </div>
+              </details>
+
+              {/* Keyboard Shortcuts Section */}
+              <details className="group">
+                  <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      <div className="flex items-center gap-2"><Keyboard size={14} /> {t.keyboardShortcuts}</div>
+                      <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
+                  </summary>
+                  <div className="pl-4 pb-4 space-y-3">
+                      <p className="text-xs text-slate-400">{t.keyboardDesc}</p>
+                      <ul className="space-y-1">
+                          {KeyboardShortcuts.map((shortcut, index) => (
+                              <li key={index} className="flex justify-between items-center text-sm text-slate-300">
+                                  <span className="font-mono bg-white/10 px-2 py-0.5 rounded-md text-primary-200 text-[11px]">{shortcut.key}</span>
+                                  <span className="flex-1 text-right ml-2">{t[shortcut.description as keyof typeof t]}</span>
+                              </li>
+                          ))}
+                      </ul>
+                      <p className="text-xs text-slate-500 italic mt-3 pt-3 border-t border-white/5">{t.gamepadSupport}</p>
                   </div>
               </details>
 

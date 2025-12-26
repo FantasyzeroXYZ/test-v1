@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { UILanguage, ABLoopMode, ABButtonMode } from '../types';
 import { getTranslation } from '../i18n';
@@ -47,7 +48,7 @@ const PlayerControls: React.FC<Props> = ({
   const t = getTranslation(lang);
 
   return (
-    <div className={`absolute bottom-0 left-0 right-0 px-4 pt-2 bg-gradient-to-t from-black/20 to-transparent transition-opacity duration-300 flex flex-col gap-2 z-30 ${isControlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+    <div className={`absolute bottom-0 left-0 right-0 px-4 pt-2 bg-gradient-to-t from-black/20 to-transparent transition-opacity duration-300 flex flex-col gap-2 z-50 ${isControlsVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
         {!isLiveStream && (
             <div className="flex items-center gap-4 text-xs font-mono text-slate-300">
                 <span>{formatTime(playedSeconds)}</span>
