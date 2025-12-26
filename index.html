@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>VAMplayer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
@@ -33,20 +33,23 @@
           radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
           radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
         color: #f8fafc;
+        overflow-x: hidden;
+        width: 100vw;
+        height: 100dvh;
       }
       /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
       }
       ::-webkit-scrollbar-track {
         background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
+        background: rgba(255, 255, 255, 0.15);
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.25);
       }
       .hide-scrollbar::-webkit-scrollbar {
         display: none;
@@ -54,6 +57,12 @@
       .hide-scrollbar {
         -ms-overflow-style: none;
         scrollbar-width: none;
+      }
+      /* Fix for mobile dynamic toolbars */
+      #root {
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
       }
     </style>
   <script type="importmap">

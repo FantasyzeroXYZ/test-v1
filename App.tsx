@@ -37,7 +37,7 @@ const App: React.FC = () => {
   const [isSeeking, setIsSeeking] = useState(false); 
   const [isBuffering, setIsBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isWideScreen, setIsWideScreen] = useState(false); // Track screen width for layout
+  const [isWideScreen, setIsWideScreen] = useState(false); 
   
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
   const [secondarySubtitles, setSecondarySubtitles] = useState<Subtitle[]>([]);
@@ -52,10 +52,8 @@ const App: React.FC = () => {
   const [activeFullscreenPanel, setActiveFullscreenPanel] = useState<'none' | 'dictionary' | 'transcript'>('none');
   const [showSettings, setShowSettings] = useState(false);
   
-  // Notification Toast State
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
 
-  // Bookmark State
   const [showBookmarkList, setShowBookmarkList] = useState(false);
   const [bookmarkModalState, setBookmarkModalState] = useState<{
       isOpen: boolean;
@@ -68,16 +66,13 @@ const App: React.FC = () => {
       color?: string;
   }>({ isOpen: false, mode: 'add', defaultTitle: '', defaultNote: '' });
 
-  // Edit Modal State
   const [isAnkiModalOpen, setIsAnkiModalOpen] = useState(false);
   const [pendingNote, setPendingNote] = useState<AnkiNoteData>({
       word: '', definition: '', sentence: '', translation: '', audioStart: 0, audioEnd: 0, imageData: null
   });
-  // New state to toggle IO mode in modal
   const [ankiModalMode, setAnkiModalMode] = useState<'standard' | 'occlusion'>('standard');
   
   const [isControlsVisible, setIsControlsVisible] = useState(true);
-  // Control Lock State: null = unlocked, 'visible' = locked shown
   const [controlsLock, setControlsLock] = useState<'visible' | null>(null);
   
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,51 +86,42 @@ const App: React.FC = () => {
   const [ankiConnected, setAnkiConnected] = useState(false);
   const [isAddingToAnki, setIsAddingToAnki] = useState(false);
   
-  // Mask State
   const [showMask, setShowMask] = useState(false);
-  const [maskTop, setMaskTop] = useState(70); // In % of video height
-  const [maskHeight, setMaskHeight] = useState(15); // In % of video height
+  const [maskTop, setMaskTop] = useState(70); 
+  const [maskHeight, setMaskHeight] = useState(15); 
   const [videoGeometry, setVideoGeometry] = useState({ width: 0, height: 0, top: 0, left: 0 });
 
-  // AB Loop State
   const [abLoopState, setAbLoopState] = useState<'none' | 'a-set' | 'looping'>('none');
   const [loopA, setLoopA] = useState(0);
   const [loopB, setLoopB] = useState(0);
   const [capturedClips, setCapturedClips] = useState<CapturedClip[]>([]);
   const [showClipsList, setShowClipsList] = useState(false);
-  const [playbackClip, setPlaybackClip] = useState<CapturedClip | null>(null); // For previewing clips
+  const [playbackClip, setPlaybackClip] = useState<CapturedClip | null>(null); 
   
-  // Recorder Mode State
   const [recorderMode, setRecorderMode] = useState<'video' | 'audio' | null>(null);
   const [recordingTarget, setRecordingTarget] = useState<{start: number, end: number, filename?: string} | null>(null);
 
-  // OCR State
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [ocrResult, setOcrResult] = useState<{ text: string | null; image: string; debug?: any } | null>(null);
-  
-  // OCR Mode State
   const [ocrMode, setOcrMode] = useState<'standard' | 'dictionary'>('standard');
-
-  // Persistent OCR Bounds (Percentages: 0-100)
-  // top/bottom define the horizontal strip. left/right define vertical cut within that strip.
   const [ocrBounds, setOcrBounds] = useState<{top: number, bottom: number, left: number, right: number}>({ top: 70, bottom: 90, left: 10, right: 90 });
   const [ocrEditMode, setOcrEditMode] = useState<'vertical' | 'horizontal'>('vertical');
   
   const ocrImageRef = useRef<HTMLImageElement>(null);
-  const ocrWrapperRef = useRef<HTMLDivElement>(null); // Wrapper to tightly bound image
+  const ocrWrapperRef = useRef<HTMLDivElement>(null); 
   
   const [ankiConfig, setAnkiConfig] = useState<AnkiConfig>({
     ip: '127.0.0.1', port: '8765',
     deck: '', model: '', tags: ['vamplayer'],
     fields: { word: '', sentence: '', definition: '', translation: '', audio: '', image: '', video: '' },
     imageOcclusion: { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '', id: '' } },
-    subtitleSize: 16, // Default 16
-    subtitleBottomMargin: 5, // Default 5
-    subtitleDisplayMode: 'interactive', // Default
+    subtitleSize: 16, 
+    subtitleBottomMargin: 5, 
+    subtitleDisplayMode: 'interactive', 
     searchEngine: 'bing',
     abButtonMode: 'loop',
     ocrLang: 'eng',
-    ocrEnabled: false // Default to false
+    ocrEnabled: false 
   });
 
   const playerRef = useRef<any>(null);
@@ -146,20 +132,15 @@ const App: React.FC = () => {
   const isRecordingRef = useRef(false); 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
-  // Callback ref to intercept recording for Anki automated flow (AUDIO ONLY)
   const ankiRecordingCallbackRef = useRef<((blob: Blob) => Promise<void>) | null>(null);
-  
   const geometryRafRef = useRef<number | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
-  
-  // Use a dedicated ref for dictionary auto-resume logic to avoid conflict with seek logic
   const dictResumeRef = useRef(false);
-  const wasPlayingRef = useRef(false); // For seeking
+  const wasPlayingRef = useRef(false); 
 
   const Player = ReactPlayer as any;
   const segmenterRef = useRef<any>(null);
 
-  // Refs for saving mask config to avoid stale state in closures
   const maskTopRef = useRef(maskTop);
   const maskHeightRef = useRef(maskHeight);
   const activeVideoItemRef = useRef(activeVideoItem);
@@ -174,7 +155,6 @@ const App: React.FC = () => {
   useEffect(() => { recordingTargetRef.current = recordingTarget; }, [recordingTarget]);
   useEffect(() => { recorderModeRef.current = recorderMode; }, [recorderMode]);
   
-  // Screen width detection
   useEffect(() => {
       const media = window.matchMedia('(min-width: 768px)');
       setIsWideScreen(media.matches);
@@ -183,7 +163,6 @@ const App: React.FC = () => {
       return () => media.removeEventListener('change', listener);
   }, []);
 
-  // Saved OCR Mode
   useEffect(() => {
       const savedOcrMode = localStorage.getItem('vam_ocr_mode');
       if (savedOcrMode === 'standard' || savedOcrMode === 'dictionary') {
@@ -198,68 +177,53 @@ const App: React.FC = () => {
       showToast(newMode === 'standard' ? t.ocrModeStandard : t.ocrModeDictionary, 'info');
   };
 
-  // Helper to clean OCR text based on language
   const cleanOcrText = useCallback((text: string, lang: string = 'eng') => {
       if (!text) return "";
       const target = lang.toLowerCase();
-      // Chinese and Japanese: remove all whitespace to fix Tesseract spacing. 
-      // Korean (kor) uses spaces, so it is excluded.
       if (target.startsWith('chi') || target.startsWith('jpn')) {
           return text.replace(/\s+/g, '');
       }
       return text.trim();
   }, []);
 
-  // Effect to calculate and update video geometry for mask positioning
   const calculateGeometry = useCallback(() => {
-    // Throttle geometry calculations with RAF
     if (geometryRafRef.current) return;
-
     geometryRafRef.current = requestAnimationFrame(() => {
         const rootContainer = playerContainerRef.current;
         const videoWrapper = videoWrapperRef.current;
         const videoEl = playerRef.current?.getInternalPlayer();
-
         if (!rootContainer || !videoWrapper || !videoEl || !videoEl.videoWidth || !videoEl.videoHeight) {
             geometryRafRef.current = null;
             return;
         }
-
         const videoWrapperRect = videoWrapper.getBoundingClientRect();
         const rootContainerRect = rootContainer.getBoundingClientRect();
-
         const videoWrapperTopOffset = videoWrapperRect.top - rootContainerRect.top;
         const videoWrapperLeftOffset = videoWrapperRect.left - rootContainerRect.left;
-
         const containerWidth = videoWrapper.clientWidth;
         const containerHeight = videoWrapper.clientHeight;
         const videoWidth = videoEl.videoWidth;
         const videoHeight = videoEl.videoHeight;
-
         const containerAR = containerWidth / containerHeight;
         const videoAR = videoWidth / videoHeight;
-
         let frameWidth, frameHeight, frameTop, frameLeft;
-
-        if (containerAR > videoAR) { // Letterbox left/right
+        if (containerAR > videoAR) { 
             frameHeight = containerHeight;
             frameWidth = containerHeight * videoAR;
             frameTop = 0;
             frameLeft = (containerWidth - frameWidth) / 2;
-        } else { // Letterbox top/bottom
+        } else { 
             frameWidth = containerWidth;
             frameHeight = containerWidth / videoAR;
             frameLeft = 0;
             frameTop = (containerHeight - frameHeight) / 2;
         }
-
         setVideoGeometry({
             width: frameWidth,
             height: frameHeight,
             top: videoWrapperTopOffset + frameTop,
             left: videoWrapperLeftOffset + frameLeft,
         });
-        
         geometryRafRef.current = null;
     });
   }, []);
@@ -267,26 +231,20 @@ const App: React.FC = () => {
   useEffect(() => {
     const container = playerContainerRef.current;
     if (!container || viewMode !== 'player') return;
-
     const resizeObserver = new ResizeObserver(calculateGeometry);
     resizeObserver.observe(container);
-
     return () => {
         resizeObserver.disconnect();
         if (geometryRafRef.current) cancelAnimationFrame(geometryRafRef.current);
     };
   }, [viewMode, calculateGeometry]);
 
-  // Explicitly recalculate geometry after fullscreen panel transition ends
   useEffect(() => {
     if (isFullscreen) {
-        const timer = setTimeout(() => {
-            calculateGeometry();
-        }, 350);
+        const timer = setTimeout(() => { calculateGeometry(); }, 350);
         return () => clearTimeout(timer);
     }
   }, [activeFullscreenPanel, isFullscreen, calculateGeometry]);
-
 
   useEffect(() => {
       try {
@@ -296,13 +254,11 @@ const App: React.FC = () => {
       }
   }, [learningLang]);
 
-  // Initial Load from IndexedDB
   useEffect(() => {
       const init = async () => {
         try {
           await initDB();
           const items = await getLibrary();
-          // Normalize items (ensure isLocal is correct)
           setLibraryItems(items.map((i) => ({...i, isLocal: i.isLocal ?? (!!i.file)})));
         } catch (e) {
           console.error("Failed to initialize DB or load library", e);
@@ -310,7 +266,6 @@ const App: React.FC = () => {
         }
       };
       init();
-
       const savedAnki = localStorage.getItem('vam_anki_config');
       if (savedAnki) {
           const config = JSON.parse(savedAnki);
@@ -320,21 +275,16 @@ const App: React.FC = () => {
           if (!config.searchEngine) config.searchEngine = 'bing';
           if (!config.subtitleDisplayMode) config.subtitleDisplayMode = 'interactive'; 
           if (!config.abButtonMode) config.abButtonMode = 'loop';
-
-          // Initialize IO config if missing
           if (!config.imageOcclusion) {
               config.imageOcclusion = { deck: '', model: '', tags: ['vamplayer_io'], fields: { image: '', mask: '', header: '', backExtra: '', remarks: '', audio: '', id: '' } };
           } 
-          
           if (!config.fields.video) config.fields.video = '';
           if (!config.ocrLang) config.ocrLang = 'eng';
           if (typeof config.ocrEnabled === 'undefined') config.ocrEnabled = false;
-
           setAnkiConfig(config);
       }
       const savedLang = localStorage.getItem('vam_ui_lang');
       if (savedLang) setLang(savedLang as UILanguage);
-      
       const savedLearningLang = localStorage.getItem('vam_learning_lang');
       if (savedLearningLang) setLearningLang(savedLearningLang as LearningLanguage);
   }, []);
@@ -348,7 +298,6 @@ const App: React.FC = () => {
     setRecordingTarget(null);
   }, [activeVideoItem?.id]);
 
-  // Load Clips separately when active video changes
   useEffect(() => {
     const loadClips = async () => {
         if (!activeVideoItem?.id) {
@@ -367,8 +316,6 @@ const App: React.FC = () => {
         }
     };
     loadClips();
-    
-    // Cleanup URLs when switching videos
     return () => {
         setCapturedClips(prev => {
             prev.forEach(c => URL.revokeObjectURL(c.src));
@@ -419,16 +366,12 @@ const App: React.FC = () => {
 
   const handleDuration = useCallback(async (dur: number) => {
     setDuration(dur);
-    
     const currentItem = activeVideoItemRef.current;
     if (currentItem && Number.isFinite(dur) && dur > 0) {
-        // IMPORTANT: Do NOT overwrite duration/isLive if the user explicitly set it as live
         if (currentItem.isLive) return;
-
         if (['Stream', 'Live', 'Unknown'].includes(currentItem.duration)) {
              const formatted = formatTime(dur);
              const updatedItem = { ...currentItem, duration: formatted, isLive: false };
-             
              await saveVideo(updatedItem);
              setLibraryItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
              setActiveVideoItem(updatedItem);
@@ -439,15 +382,10 @@ const App: React.FC = () => {
   const handleStartRecording = useCallback((modeOverride?: 'video' | 'audio') => {
       const videoEl = playerRef.current?.getInternalPlayer() as HTMLVideoElement;
       if (!videoEl) return;
-      
       const currentMode = modeOverride || recorderModeRef.current || 'video';
-
       try {
           const captureStream = (videoEl as any).captureStream() as MediaStream;
           let streamToRecord = captureStream;
-
-          // CRITICAL FIX: For pure audio, create a new MediaStream with ONLY audio tracks.
-          // This prevents recording a video file with black frames.
           if (currentMode === 'audio') {
               const audioTracks = captureStream.getAudioTracks();
               if (audioTracks.length > 0) {
@@ -457,35 +395,26 @@ const App: React.FC = () => {
                   return; 
               }
           }
-          
           const mimeType = getSupportedMimeType(currentMode === 'video' ? 'video' : 'audio');
           if (!mimeType) {
               showToast("No supported recording MIME type found", 'error');
               return;
           }
-
-          // Pass mimeType to recorder options explicitly
           const recorder = new MediaRecorder(streamToRecord, { mimeType });
           mediaRecorderRef.current = recorder;
           recordedChunksRef.current = [];
-
           recorder.ondataavailable = (event) => {
               if (event.data.size > 0) {
                   recordedChunksRef.current.push(event.data);
               }
           };
-
-          // Use onstop to safely handle the final blob logic
           recorder.onstop = async () => {
               const currentTarget = recordingTargetRef.current;
               const mode = recorderModeRef.current || 'video';
               const mimeType = getSupportedMimeType(mode === 'video' ? 'video' : 'audio');
               const blob = new Blob(recordedChunksRef.current, { type: mimeType });
-              
-              // INTERCEPTOR: If an automated Anki recording callback is set, use it and exit.
               if (ankiRecordingCallbackRef.current) {
                   await ankiRecordingCallbackRef.current(blob);
-                  // Reset automated recording state
                   ankiRecordingCallbackRef.current = null;
                   isRecordingRef.current = false;
                   setRecorderMode(null);
@@ -493,14 +422,9 @@ const App: React.FC = () => {
                   recordedChunksRef.current = [];
                   return; 
               }
-
               const url = URL.createObjectURL(blob);
-              
               if (currentTarget?.filename) {
-                  // Save to clips regardless if filename is present, using that filename as title
-                  // This is the logic for "Video recording for Anki": it saves to Clips, not direct download.
                   const title = currentTarget.filename;
-                  
                   const newClip: CapturedClip = {
                       id: crypto.randomUUID(),
                       type: mode === 'video' ? 'video' : 'audio',
@@ -511,7 +435,6 @@ const App: React.FC = () => {
                       blob: blob,
                       videoId: activeVideoItemRef.current?.id
                   };
-                  
                   try {
                       await saveClip(newClip);
                       setCapturedClips(prev => [newClip, ...prev]);
@@ -520,30 +443,23 @@ const App: React.FC = () => {
                       console.error("Failed to save clip", e);
                       showToast(t.clipFailed, 'error');
                   }
-
               } else {
-                  // Standard manual recording without specific filename
                   const titleTime = formatTime(playerRef.current?.getCurrentTime() || 0);
-                  // FIX: Use .weba for audio files to distinguish them in the local list, but careful with Anki
                   const ext = mode === 'video' ? 'webm' : 'weba';
                   let title = `${mode === 'video' ? 'Video' : 'Audio'} ${titleTime}`;
-
                   if (currentTarget) {
                       title = `${mode === 'video' ? 'Video' : 'Audio'} Clip ${formatTime(currentTarget.start)} - ${formatTime(currentTarget.end)}`;
                   }
-
                   const newClip: CapturedClip = {
                       id: crypto.randomUUID(),
                       type: mode === 'video' ? 'video' : 'audio',
-                      src: url, // Temporary blob URL for session
+                      src: url, 
                       title: title,
                       timestamp: Date.now(),
-                      duration: 0, // Metadata only
+                      duration: 0, 
                       blob: blob,
-                      videoId: activeVideoItemRef.current?.id // Associate with active video
+                      videoId: activeVideoItemRef.current?.id 
                   };
-                  
-                  // Save to IndexedDB
                   try {
                       await saveClip(newClip);
                       setCapturedClips(prev => [newClip, ...prev]);
@@ -553,17 +469,13 @@ const App: React.FC = () => {
                       showToast(t.clipFailed, 'error');
                   }
               }
-
-              // Cleanup state
               isRecordingRef.current = false;
               setRecorderMode(null);
               setRecordingTarget(null);
               recordedChunksRef.current = [];
           };
-
-          recorder.start(100); // 100ms slices
+          recorder.start(100); 
           isRecordingRef.current = true;
-          // Don't show toast if it is for Anki automated flow (it might be too verbose if already shown)
           if (!ankiRecordingCallbackRef.current) {
               showToast(t.recording, 'info');
           }
@@ -577,8 +489,6 @@ const App: React.FC = () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
           mediaRecorderRef.current.stop();
       }
-      // Note: We do NOT clear state here immediately because onstop needs it.
-      // isRecordingRef is cleared in onstop.
   }, []);
 
   const handleDeleteClip = async (id: string) => {
@@ -586,7 +496,6 @@ const App: React.FC = () => {
           await deleteClip(id);
           setCapturedClips(prev => {
               const updated = prev.filter(c => c.id !== id);
-              // Revoke URL of deleted clip
               const deleted = prev.find(c => c.id === id);
               if (deleted) URL.revokeObjectURL(deleted.src);
               return updated;
@@ -600,37 +509,25 @@ const App: React.FC = () => {
 
   const handleProgress = useCallback((state: any) => {
       if (isSeeking || seekLockRef.current || !playerRef.current) return; 
-      
       const time = state.playedSeconds;
-
-      // 1. Handle Targeted Recording (High Priority: Check BEFORE loop logic)
       if (isRecordingRef.current && recordingTarget && time >= recordingTarget.end) {
            handleStopRecording();
            setIsPlaying(false);
            return;
       }
-
-      // 2. Handle Loop Mode
-      if (abLoopState === 'looping' && ankiConfig.abButtonMode === 'loop' && time >= loopB) {
+      if (abLoopState === 'looping' && time >= (loopB - 0.05)) {
           playerRef.current.seekTo(loopA, 'seconds');
           setPlayedSeconds(loopA);
           return;
       }
-
       if (isRecordingRef.current) {
           setPlayedSeconds(time); 
           return;
       }
-
-      const timeDiff = Math.abs(time - playedSeconds);
-      if (timeDiff < 0.2 && isPlaying) return; 
-      
       setPlayedSeconds(time);
-      
       const effectiveTime = time;
       let newIndex = currentSubtitleIndex;
       const currentSub = subtitles[currentSubtitleIndex];
-      
       if (currentSub && effectiveTime >= (currentSub.start + subtitleOffset) && effectiveTime <= (currentSub.end + subtitleOffset)) {
       } else {
           newIndex = subtitles.findIndex(s => 
@@ -638,7 +535,6 @@ const App: React.FC = () => {
             effectiveTime <= (s.end + subtitleOffset)
           );
       }
-      
       if (newIndex !== currentSubtitleIndex) {
         setCurrentSubtitleIndex(newIndex);
       }
@@ -651,9 +547,7 @@ const App: React.FC = () => {
   const handlePlayerMouseMove = (e: React.MouseEvent | React.TouchEvent) => {
       setIsControlsVisible(true);
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-      
       if (controlsLock === 'visible' || abLoopState !== 'none') return;
-
       if (isPlaying) {
           controlsTimeoutRef.current = setTimeout(() => {
               setIsControlsVisible(false);
@@ -668,13 +562,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
       const shouldPinControls = controlsLock === 'visible' || abLoopState !== 'none';
-
       if (shouldPinControls) {
           setIsControlsVisible(true);
           if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
           return; 
       }
-
       if (!isPlaying) {
           setIsControlsVisible(true);
           if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -684,7 +576,6 @@ const App: React.FC = () => {
               setIsControlsVisible(false);
           }, 3000);
       }
-      
       return () => {
           if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
       };
@@ -707,9 +598,7 @@ const App: React.FC = () => {
     setPlayedSeconds(time);
     seekLockRef.current = true;
     setIsSeeking(false);
-    
     if (playerRef.current) playerRef.current.seekTo(time, 'seconds');
-    
     setTimeout(() => {
       if (wasPlayingRef.current) setIsPlaying(true);
       setTimeout(() => seekLockRef.current = false, 800);
@@ -724,8 +613,7 @@ const App: React.FC = () => {
         src: URL.createObjectURL(file), type: file.type.startsWith('audio') ? 'audio' : 'video', file: file, isLocal: true,
         filename: file.name
       };
-      
-      await saveVideo(newItem, file); // Save to DB
+      await saveVideo(newItem, file); 
       setLibraryItems(prev => [...prev, newItem]);
     } catch (e) {
       console.error(e);
@@ -736,12 +624,11 @@ const App: React.FC = () => {
   const handleAddNetworkVideo = async (url: string, title: string, source: string, id?: string, isLiveInput?: boolean) => {
     const isLive = !!isLiveInput;
     const durationLabel = isLive ? 'Live' : 'Stream';
-    
     if (id) {
         const updatedItem = libraryItems.find(i => i.id === id);
         if (updatedItem) {
             const newItem = { ...updatedItem, src: url, title: title, duration: durationLabel, isLive: isLive, isLocal: false, source: source };
-            await saveVideo(newItem); // Update DB
+            await saveVideo(newItem); 
             setLibraryItems(prev => prev.map(item => item.id === id ? newItem : item));
             if (activeVideoItem?.id === id) {
                 setActiveVideoItem(newItem);
@@ -752,13 +639,13 @@ const App: React.FC = () => {
           id: crypto.randomUUID(), title: title, thumbnail: '', duration: durationLabel,
           src: url, type: 'video', isLive: isLive, isLocal: false, source: source
         };
-        await saveVideo(newItem); // Save DB
+        await saveVideo(newItem); 
         setLibraryItems(prev => [...prev, newItem]);
     }
   };
 
   const handleDeleteVideo = async (id: string) => {
-      await deleteVideo(id); // Delete from DB
+      await deleteVideo(id); 
       setLibraryItems(prev => prev.filter(item => item.id !== id));
       localStorage.removeItem(`vam_progress_${id}`);
       localStorage.removeItem(`vam_sub_primary_${id}`);
@@ -769,7 +656,6 @@ const App: React.FC = () => {
       const pStore = localStorage.getItem(`vam_sub_primary_${item.id}`);
       if (pStore && item.hasPrimarySubtitle) setSubtitles(JSON.parse(pStore));
       else setSubtitles([]);
-
       const sStore = localStorage.getItem(`vam_sub_secondary_${item.id}`);
       if (sStore && item.hasSecondarySubtitle) {
           setSecondarySubtitles(JSON.parse(sStore));
@@ -796,7 +682,6 @@ const App: React.FC = () => {
               showToast("Error loading file from storage", 'error');
           }
       }
-
       setActiveVideoItem(item);
       setMediaType(item.type);
       setSubtitles([]);
@@ -805,7 +690,6 @@ const App: React.FC = () => {
       setIsPlaying(false);
       setSubtitleOffset(0); 
       loadSubtitlesFromStorage(item);
-      
       const isLive = item.isLive;
       if (!isLive) {
           const savedTime = localStorage.getItem(`vam_progress_${item.id}`);
@@ -813,7 +697,6 @@ const App: React.FC = () => {
       } else {
           setPlayedSeconds(0); 
       }
-
       const savedMaskConfig = item.maskConfig;
       if (savedMaskConfig) {
           setMaskTop(savedMaskConfig.top);
@@ -822,7 +705,6 @@ const App: React.FC = () => {
           setMaskTop(70);
           setMaskHeight(15);
       }
-
       onReadyRef.current = false;
       setViewMode('player');
   };
@@ -830,9 +712,8 @@ const App: React.FC = () => {
   const saveSubtitle = async (item: VideoLibraryItem, parsed: Subtitle[], type: 'primary' | 'secondary') => {
       const key = `vam_sub_${type}_${item.id}`;
       localStorage.setItem(key, JSON.stringify(parsed));
-      
       const updatedItem = { ...item, [type === 'primary' ? 'hasPrimarySubtitle' : 'hasSecondarySubtitle']: true };
-      await saveVideo(updatedItem); // Update DB metadata
+      await saveVideo(updatedItem); 
       setLibraryItems(prev => prev.map(i => i.id === item.id ? updatedItem : i));
   };
 
@@ -848,7 +729,6 @@ const App: React.FC = () => {
           if (file.name.endsWith('.vtt')) parsed = parseVTT(text);
           else if (file.name.endsWith('.ass')) parsed = parseASS(text);
           else parsed = parseSRT(text);
-          
           if (type === 'primary') {
               if (activeVideoItem?.id === item.id) {
                  setSubtitles(parsed);
@@ -868,9 +748,7 @@ const App: React.FC = () => {
   const handleUpdateLocalVideo = async (id: string, newTitle: string, source: string, file?: File) => {
       const item = libraryItems.find(i => i.id === id);
       if (!item) return;
-
       let updatedItem = { ...item, title: newTitle, source: source };
-
       if (file) {
           const thumb = await generateVideoThumbnail(file);
           const newUrl = URL.createObjectURL(file);
@@ -884,9 +762,8 @@ const App: React.FC = () => {
           };
           await saveVideo(updatedItem, file);
       } else {
-          await saveVideo(updatedItem); // Metadata only update
+          await saveVideo(updatedItem); 
       }
-
       setLibraryItems(prev => prev.map(i => i.id === id ? updatedItem : i));
       if (activeVideoItem?.id === id) {
           setActiveVideoItem(updatedItem);
@@ -922,45 +799,29 @@ const App: React.FC = () => {
   ) => {
       setIsAddingToAnki(true);
       try {
-          // Force pause to ensure clean state
           setIsPlaying(false);
-          
-          // Capture Image: Use ReactPlayer's internal player logic
           const videoEl = playerRef.current?.getInternalPlayer() as HTMLVideoElement;
           const imageData = captureVideoFrame(videoEl);
-          
           if (!imageData && isScreenshot) {
               showToast(t.ocrErrorCORS || "Screenshot failed", 'error');
           }
-          
-          // Determine Timings
           let start = Math.max(0, playedSeconds - 2);
           let end = Math.min(duration, playedSeconds + 2);
-          
-          // If we have a subtitle active, use that
           if (currentSubtitleIndex !== -1 && subtitles[currentSubtitleIndex]) {
               start = subtitles[currentSubtitleIndex].start + subtitleOffset;
               end = subtitles[currentSubtitleIndex].end + subtitleOffset;
           }
-
-          // If manual sentence passed (e.g. from Dict), use it. Otherwise try to find subtitle text.
           const finalSentence = sentence || getActiveSubtitleText(subtitles, playedSeconds) || "";
-          
-          // --- HIGHLIGHTING LOGIC START ---
           let processedSentence = finalSentence;
           if (term && finalSentence) {
              try {
-                 // Escape special regex characters in the term to prevent errors
                  const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                 // Create a case-insensitive, global regex to replace occurrences with bold tags
                  const regex = new RegExp(`(${escapedTerm})`, 'gi');
                  processedSentence = finalSentence.replace(regex, '<b>$1</b>');
              } catch(e) {
                  console.warn("Failed to highlight term in sentence", e);
              }
           }
-          // --- HIGHLIGHTING LOGIC END ---
-          
           const noteData: AnkiNoteData = {
               word: term,
               definition: definition,
@@ -971,19 +832,13 @@ const App: React.FC = () => {
               audioEnd: end,
               occlusionMasks: initialMasks
           };
-
           setPendingNote(noteData);
-          setAnkiModalMode(isScreenshot || initialMasks ? 'occlusion' : 'standard'); // Decide mode
-          
+          setAnkiModalMode(isScreenshot || initialMasks ? 'occlusion' : 'standard'); 
           if (autoOpen) {
-              // 1. Close Dictionary Panels & Pause Video immediately
               setDictOpen(false);
               setActiveFullscreenPanel('none');
-              
-              // 2. Open Anki Modal
               setIsAnkiModalOpen(true);
           }
-
       } catch (e) {
           console.error(e);
           showToast(t.failedToPrepareCard, 'error');
@@ -993,17 +848,14 @@ const App: React.FC = () => {
   };
 
   const handleWordClick = (segment: string, fullText: string, segments: string[], nextIndex: number) => {
-    // Save state and pause. Use a separate ref for dictionary resume to not conflict with seek logic.
     dictResumeRef.current = isPlaying;
     if (isPlaying) setIsPlaying(false);
-    
     const cleanWord = segment.trim(); 
     if (!cleanWord) return;
     setSelectedWord(cleanWord);
     setSelectedSentence(fullText);
     setCurrentSegments(segments);
     setNextSegmentIndex(nextIndex);
-    
     if (isFullscreen) {
         setActiveFullscreenPanel('dictionary');
     } else {
@@ -1017,9 +869,6 @@ const App: React.FC = () => {
     } else {
         setDictOpen(false);
     }
-    
-    // Auto-resume if it was playing before dictionary opened and is currently paused
-    // Only resume if we are not still playing (e.g. user manually hit play while pinned)
     if (dictResumeRef.current && !isPlaying) {
         setIsPlaying(true);
     }
@@ -1029,19 +878,20 @@ const App: React.FC = () => {
   const handleAppendWord = () => {
       if (nextSegmentIndex < currentSegments.length) {
           const nextSegment = currentSegments[nextSegmentIndex];
-          const isCJK = ['zh', 'ja'].includes(learningLang);
+          const isCJK = ['zh', 'ja'].includes(learningLang || 'en');
           const separator = isCJK ? '' : ' ';
           const newWord = selectedWord + separator + nextSegment;
           setSelectedWord(newWord);
           setNextSegmentIndex(prev => prev + 1);
       }
   };
+
   const handleSeekTo = useCallback((time: number) => {
-      playerRef.current?.seekTo(time, 'seconds');
-      setPlayedSeconds(time);
-      const index = subtitles.findIndex(s => time >= (s.start + subtitleOffset) && time <= (s.end + subtitleOffset));
-      if (index !== -1) setCurrentSubtitleIndex(index);
-  }, [subtitles, subtitleOffset]);
+      if (playerRef.current) {
+          playerRef.current.seekTo(time, 'seconds');
+          setPlayedSeconds(time);
+      }
+  }, []);
   
   const handlePreviewAudio = useCallback((start: number, end: number) => {
       if (!playerRef.current) return;
@@ -1058,13 +908,21 @@ const App: React.FC = () => {
         return;
     }
 
-    let nextIndex = currentSubtitleIndex + offset;
-    if (nextIndex < 0) nextIndex = 0;
-    if (nextIndex >= subtitles.length) nextIndex = subtitles.length - 1;
-    const sub = subtitles[nextIndex];
-    const seekTime = sub.start + subtitleOffset;
-    handleSeekTo(seekTime);
+    const currentTime = playerRef.current?.getCurrentTime() || playedSeconds;
+    let targetIndex;
+    
+    if (offset > 0) {
+        targetIndex = subtitles.findIndex(s => (s.start + subtitleOffset) > (currentTime + 0.1));
+        if (targetIndex === -1) targetIndex = subtitles.length - 1;
+    } else {
+        const reversedIndex = [...subtitles].reverse().findIndex(s => (s.start + subtitleOffset) < (currentTime - 0.5));
+        targetIndex = reversedIndex === -1 ? 0 : subtitles.length - 1 - reversedIndex;
+    }
+
+    const sub = subtitles[targetIndex];
+    handleSeekTo(sub.start + subtitleOffset);
   };
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) playerContainerRef.current?.requestFullscreen();
     else document.exitFullscreen();
@@ -1082,9 +940,7 @@ const App: React.FC = () => {
   };
 
   const handleScreenshotClick = async () => {
-      // Use existing video mask position as default IO mask if visible
       let initialMasks: { x: number; y: number; w: number; h: number }[] | undefined;
-      
       if (showMask) {
           initialMasks = [{
               x: 0,
@@ -1093,62 +949,46 @@ const App: React.FC = () => {
               h: maskHeight
           }];
       }
-      
       await addToAnki("", "", undefined, undefined, undefined, true, true, initialMasks);
   };
 
-  // --- OCR Direct Execution Logic ---
   const performDirectOcr = async () => {
       const videoEl = playerRef.current?.getInternalPlayer();
       if (!videoEl || !(videoEl instanceof HTMLVideoElement)) {
           showToast(t.ocrErrorCORS, 'error');
           return;
       }
-
       setIsPlaying(false);
       showToast(t.ocrProcessing, 'info');
-
       try {
           const dataUrl = captureVideoFrame(videoEl);
           if (!dataUrl) throw new Error("Capture failed");
-
           const img = new Image();
           img.src = dataUrl.startsWith('data:') ? dataUrl : `data:image/jpeg;base64,${dataUrl}`;
-          
           await new Promise((resolve) => { img.onload = resolve; });
-
           const naturalW = img.naturalWidth;
           const naturalH = img.naturalHeight;
-
-          // Crop based on ocrBounds percentages
           const canvas = document.createElement('canvas');
           const cropX = (ocrBounds.left / 100) * naturalW;
           const cropY = (ocrBounds.top / 100) * naturalH;
           const cropW = ((ocrBounds.right - ocrBounds.left) / 100) * naturalW;
           const cropH = ((ocrBounds.bottom - ocrBounds.top) / 100) * naturalH;
-
           if (cropW <= 0 || cropH <= 0) throw new Error("Invalid selection area");
-
           canvas.width = cropW;
           canvas.height = cropH;
           const ctx = canvas.getContext('2d');
-          
           if (!ctx) throw new Error("Canvas context failed");
-          
           ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
           const imageToScan = canvas.toDataURL('image/png');
-          
           const res = await Tesseract.recognize(
               imageToScan,
               ankiConfig.ocrLang || 'eng'
           );
-          
           const rawText = res.data.text;
           const cleanedText = cleanOcrText(rawText, ankiConfig.ocrLang || 'eng');
-          
           if (cleanedText) {
               setSelectedSentence(cleanedText);
-              setSelectedWord(''); // Clear word so it doesn't auto-search immediately unless desired
+              setSelectedWord(''); 
               if (isFullscreen) {
                   setActiveFullscreenPanel('dictionary');
               } else {
@@ -1157,34 +997,27 @@ const App: React.FC = () => {
           } else {
               showToast(t.ocrNoText, 'error');
           }
-
       } catch (e) {
           console.error("Direct OCR Error", e);
           showToast(t.ocrErrorEmpty, 'error');
       }
   };
 
-  // 1. Capture Frame & Open Modal (Refactored to support modes)
   const handleOcrClick = () => {
       if (ocrMode === 'dictionary') {
           performDirectOcr();
           return;
       }
-
-      // Standard Mode
       const videoEl = playerRef.current?.getInternalPlayer();
       if (!videoEl || !(videoEl instanceof HTMLVideoElement)) {
           showToast(t.ocrErrorCORS, 'error');
           return;
       }
-      
       setIsPlaying(false);
-      // Capture full frame
       const dataUrl = captureVideoFrame(videoEl);
       if (dataUrl) {
           const src = dataUrl.startsWith('data:') ? dataUrl : `data:image/jpeg;base64,${dataUrl}`;
           setOcrResult({ text: null, image: src });
-          // No longer forcing 'vertical' reset to respect persistence preference
       } else {
           showToast(t.ocrErrorCORS, 'error');
       }
@@ -1201,43 +1034,32 @@ const App: React.FC = () => {
       }
   };
 
-  // 3. Process OCR on selected crop
   const executeOcr = async () => {
       if (!ocrResult?.image || !ocrImageRef.current) return;
-      
       setIsOcrProcessing(true);
       try {
-          // Determine source image dimensions (natural width/height)
           const img = ocrImageRef.current;
           const naturalW = img.naturalWidth;
           const naturalH = img.naturalHeight;
-
-          // Crop based on ocrBounds percentages
           const canvas = document.createElement('canvas');
           const cropX = (ocrBounds.left / 100) * naturalW;
           const cropY = (ocrBounds.top / 100) * naturalH;
           const cropW = ((ocrBounds.right - ocrBounds.left) / 100) * naturalW;
           const cropH = ((ocrBounds.bottom - ocrBounds.top) / 100) * naturalH;
-
-          // Ensure valid dimensions
           if (cropW <= 0 || cropH <= 0) throw new Error("Invalid selection area");
-
           canvas.width = cropW;
           canvas.height = cropH;
           const ctx = canvas.getContext('2d');
           if (ctx) {
               ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
               const imageToScan = canvas.toDataURL('image/png');
-              
               const res = await Tesseract.recognize(
                   imageToScan,
                   ankiConfig.ocrLang || 'eng',
                   { logger: m => console.log(m) }
               );
-              
               const rawText = res.data.text;
               const cleanedText = cleanOcrText(rawText, ankiConfig.ocrLang || 'eng');
-              
               setOcrResult(prev => prev ? { ...prev, text: cleanedText } : null);
           }
       } catch (e) {
@@ -1250,7 +1072,6 @@ const App: React.FC = () => {
 
   const renderLine = (text: string, isInteractive: boolean, alignment: 'center' | 'left' = 'center') => {
       if (!isInteractive) return <span className="cursor-text">{text}</span>;
-
       let segments: { segment: string; index: number; isWordLike: boolean }[] = [];
       if (segmenterRef.current) {
           const iter = segmenterRef.current.segment(text);
@@ -1259,7 +1080,6 @@ const App: React.FC = () => {
           segments = text.split(/(\s+)/).map((s, i) => ({ segment: s, index: i, isWordLike: /\S/.test(s) }));
       }
       const allSegmentStrings = segments.map(s => s.segment);
-      
       return (
         <div className={`flex flex-wrap gap-0 ${alignment === 'center' ? 'justify-center' : 'justify-start'}`}>
             {segments.map((item, i) => {
@@ -1275,59 +1095,40 @@ const App: React.FC = () => {
       );
   };
 
-
   const renderCurrentSubtitles = () => {
       const primaryText = getActiveSubtitleText(subtitles, playedSeconds);
       const secondaryText = getActiveSubtitleText(secondarySubtitles, playedSeconds);
-      
       const containerClass = "inline-block px-4 py-2 rounded-lg text-white select-text transition-transform max-w-[95%] md:max-w-[80%]";
       const dynamicSizeStyle = { 
           fontSize: `${ankiConfig.subtitleSize}px`,
           textShadow: '0 2px 4px rgba(0,0,0,0.8), 0 0 2px rgba(0,0,0,0.8)' 
       };
-      const secondaryTextClass = "leading-relaxed text-yellow-200/90 mt-1";
-      
       const isInteractive = ankiConfig.subtitleDisplayMode === 'interactive';
-
       if (subtitleMode === 'primary') {
          return primaryText ? <div className={containerClass} onClick={(e) => e.stopPropagation()}><div style={dynamicSizeStyle} className="leading-relaxed font-medium">{renderLine(primaryText, isInteractive, 'center')}</div></div> : null;
       }
       if (subtitleMode === 'secondary') {
-         return secondaryText ? <div className={containerClass} onClick={(e) => e.stopPropagation()}><div style={{ fontSize: `${ankiConfig.subtitleSize * 0.8}px`, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className={secondaryTextClass}>{secondaryText}</div></div> : null;
+         return secondaryText ? <div className={containerClass} onClick={(e) => e.stopPropagation()}><div style={{ fontSize: `${ankiConfig.subtitleSize * 0.8}px`, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }} className="leading-relaxed text-yellow-200/90 mt-1">{secondaryText}</div></div> : null;
       }
       return null;
   };
 
   const isSubtitleActive = (getActiveSubtitleText(subtitles, playedSeconds) || getActiveSubtitleText(secondarySubtitles, playedSeconds));
-  const mainContainerClasses = viewMode === 'library' ? "w-full max-w-7xl px-4 md:px-6 py-6" : "w-full h-[calc(100vh-80px)] overflow-hidden bg-black"; 
-  const playerWrapperClasses = isFullscreen ? "flex items-center justify-center bg-black overflow-hidden relative" : "w-full h-full relative group bg-black";
-  
-  const controlBarHeightEstimate = isControlsVisible ? 85 : 0;
+  const mainContainerClasses = viewMode === 'library' ? "w-full max-w-7xl px-4 md:px-6 py-6" : "w-full h-full overflow-hidden bg-black"; 
+  const playerWrapperClasses = isFullscreen ? "flex items-center justify-center bg-black overflow-hidden relative w-full h-full" : "w-full h-full relative group bg-black";
+  const controlBarHeightEstimate = (isControlsVisible && !isFullscreen) ? 85 : 0;
   const subtitleBottomStyle = {
-      bottom: `${ankiConfig.subtitleBottomMargin + controlBarHeightEstimate}px`
+      bottom: isFullscreen ? '10%' : `${ankiConfig.subtitleBottomMargin + controlBarHeightEstimate}px`
   };
 
   const saveMaskConfig = async (top: number, height: number) => {
     const currentItem = activeVideoItemRef.current;
     if (!currentItem) return;
-
     const newConfig = { top, height };
     const updatedItem = { ...currentItem, maskConfig: newConfig };
-    
-    // Update DB
     await saveVideo(updatedItem);
-
-    setLibraryItems(prevItems =>
-        prevItems.map(item =>
-            item.id === currentItem.id
-                ? updatedItem
-                : item
-        )
-    );
-
-    setActiveVideoItem(prevActive =>
-        prevActive && prevActive.id === currentItem.id ? updatedItem : prevActive
-    );
+    setLibraryItems(prevItems => prevItems.map(item => item.id === currentItem.id ? updatedItem : item));
+    setActiveVideoItem(prevActive => prevActive && prevActive.id === currentItem.id ? updatedItem : prevActive);
   };
 
   const handleMaskMouseDown = (e: React.MouseEvent | React.TouchEvent, type: 'move' | 'resize') => {
@@ -1335,20 +1136,16 @@ const App: React.FC = () => {
       const startY = getEventY(e);
       const startVal = type === 'move' ? maskTop : maskHeight;
       const videoHeightInPixels = videoGeometry.height;
-
       if (videoHeightInPixels === 0) return;
-
       const handleMove = (ev: MouseEvent | TouchEvent) => {
           const diffInPixels = getEventY(ev) - startY;
           const diffInPercent = (diffInPixels / videoHeightInPixels) * 100;
-          
           if (type === 'move') {
               setMaskTop(prev => Math.max(0, Math.min(100 - maskHeight, startVal + diffInPercent)));
           } else {
               setMaskHeight(prev => Math.max(2, Math.min(100 - maskTop, startVal + diffInPercent)));
           }
       };
-
       const handleUp = () => {
           window.removeEventListener('mousemove', handleMove);
           window.removeEventListener('mouseup', handleUp);
@@ -1356,7 +1153,6 @@ const App: React.FC = () => {
           window.removeEventListener('touchend', handleUp);
           saveMaskConfig(maskTopRef.current, maskHeightRef.current);
       };
-
       window.addEventListener('mousemove', handleMove);
       window.addEventListener('mouseup', handleUp);
       window.addEventListener('touchmove', handleMove);
@@ -1385,27 +1181,18 @@ const App: React.FC = () => {
               return;
           }
       }
-
       if (data) {
-          if (data.fatal === false) {
-              return; 
-          }
-
-          console.error('Fatal HLS Error:', data);
+          if (data.fatal === false) return; 
           if (hlsInstance) {
               switch (data.type) {
                   case 'mediaError':
-                      console.log('Attempting to recover from fatal media error...');
                       hlsInstance.recoverMediaError();
                       return; 
                   case 'networkError':
                       if (data.details === 'manifestLoadError' || data.response?.code === 0) {
-                           console.error('Fatal network error (Manifest/CORS/Mixed Content). Destroying HLS instance.');
                            hlsInstance.destroy();
                            break; 
                       }
-
-                      console.error('Fatal network error. Attempting to start load...');
                       hlsInstance.startLoad();
                       return; 
                   default:
@@ -1414,9 +1201,6 @@ const App: React.FC = () => {
               }
           }
       }
-
-      console.error('Player Error Object:', e);
-
       if (e?.target?.error?.code === e?.target?.error?.MEDIA_ERR_NETWORK) {
          showToast("Network Error: Check internet or stream availability.", 'error');
       } else if (e?.target?.error?.code === e?.target?.error?.MEDIA_ERR_DECODE) {
@@ -1447,7 +1231,6 @@ const App: React.FC = () => {
   const handleImportData = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = async (ev) => {
           try {
@@ -1461,7 +1244,7 @@ const App: React.FC = () => {
           }
       };
       reader.readAsText(file);
-      e.target.value = ''; // Reset input
+      e.target.value = ''; 
   };
 
   const handleClearCache = async () => {
@@ -1472,11 +1255,8 @@ const App: React.FC = () => {
       }
   };
 
-  // NEW FUNCTIONS IMPLEMENTATION START
-
   const handleABLoopClick = useCallback(() => {
     if (ankiConfig.abButtonMode === 'record') {
-       // Direct Record Mode: Click 1 = Start, Click 2 = Stop
        if (isRecordingRef.current) {
            handleStopRecording();
        } else {
@@ -1484,8 +1264,6 @@ const App: React.FC = () => {
        }
        return;
     }
-
-    // Loop Mode
     const currentTime = playerRef.current?.getCurrentTime() || 0;
     if (abLoopState === 'none') {
         setLoopA(currentTime);
@@ -1510,34 +1288,23 @@ const App: React.FC = () => {
   }, [abLoopState, loopA, ankiConfig.abButtonMode, handleStartRecording, handleStopRecording, showToast]);
 
   const handleConfirmAddNote = async (noteData: AnkiNoteData) => {
-      // 1. Close Modal Immediately
       setIsAnkiModalOpen(false);
-
       const isIO = ankiModalMode === 'occlusion';
       const configFields = (isIO ? ankiConfig.imageOcclusion.fields : ankiConfig.fields) as any;
-
-      // Generate filenames for potential recordings
       const timestamp = Date.now();
       const videoFilename = `vam_video_${timestamp}.webm`;
-      // Revert to .webm to prevent AnkiConnect renaming to .bin
       const audioFilename = `vam_audio_${timestamp}.webm`;
-
-      // Helper to construct and send the note
       const executeNoteCreation = async (audioBlob?: Blob) => {
-          // Validate IO Fields
           if (isIO) {
               if (!configFields.image || !configFields.mask) {
                   showToast("Error: Image or Mask field not mapped in Settings!", 'error');
                   return;
               }
           }
-
-          // A. Store Image (if present)
           let imageRef = '';
           if (noteData.imageData) {
               const imageFilename = `vam_img_${timestamp}.jpg`;
               try {
-                  // FIX: Capture the ACTUAL filename returned by AnkiConnect
                   const storedImageName = await ankiService.storeMediaFile(imageFilename, noteData.imageData);
                   imageRef = `<img src="${storedImageName || imageFilename}">`;
               } catch (e) {
@@ -1546,13 +1313,10 @@ const App: React.FC = () => {
                   return;
               }
           }
-
-          // B. Store Audio (if audio blob provided from interceptor)
           let audioRef = '';
           if (audioBlob) {
                try {
                    const audioBase64 = await blobToBase64(audioBlob);
-                   // FIX: Capture the ACTUAL filename returned by AnkiConnect
                    const storedAudioName = await ankiService.storeMediaFile(audioFilename, audioBase64);
                    audioRef = `[sound:${storedAudioName || audioFilename}]`;
                } catch (e) {
@@ -1560,23 +1324,13 @@ const App: React.FC = () => {
                    showToast(t.failedToStoreAudio, 'error');
                }
           }
-
-          // C. Handle Video Field (Text Reference Only)
-          // If video recording is requested, we insert the [sound:...] tag assuming the user will import the file later.
           let videoRef = '';
           if (noteData.includeVideo && activeVideoItem) {
-              // We use [sound:...] format so Anki plays it if the file exists in collection.media
-              // For video, we don't upload here (it's too big), so we rely on the intended filename.
-              // Note: If user manually imports, they must ensure filename matches or update the card.
               videoRef = `[sound:${videoFilename}]`;
           }
-
-          // D. Map Fields
           const fields: Record<string, string> = {};
-          
           const mapFields = () => {
               if (!isIO) {
-                  // Standard
                   if (configFields.word) fields[configFields.word] = noteData.word || '';
                   if (configFields.sentence) fields[configFields.sentence] = noteData.sentence || '';
                   if (configFields.definition) fields[configFields.definition] = noteData.definition || '';
@@ -1585,7 +1339,6 @@ const App: React.FC = () => {
                   if (configFields.audio && audioRef) fields[configFields.audio] = audioRef;
                   if (configFields.video && videoRef) fields[configFields.video] = videoRef;
               } else {
-                  // Image Occlusion
                   if (configFields.header) fields[configFields.header] = noteData.word || ''; 
                   if (configFields.backExtra) fields[configFields.backExtra] = noteData.definition || '';
                   if (configFields.remarks) fields[configFields.remarks] = noteData.remarks || '';
@@ -1594,87 +1347,49 @@ const App: React.FC = () => {
                   if (configFields.id) fields[configFields.id] = crypto.randomUUID(); 
               }
           };
-
           const deckName = isIO ? ankiConfig.imageOcclusion.deck : ankiConfig.deck;
           const modelName = isIO ? ankiConfig.imageOcclusion.model : ankiConfig.model;
           const tags = isIO ? ankiConfig.imageOcclusion.tags : ankiConfig.tags;
-
           mapFields();
-
-          // Handle Mask Field: Text-based Image Occlusion format
           if (isIO && configFields.mask && noteData.occlusionMasks && noteData.occlusionMasks.length > 0) {
                const maskStrings = noteData.occlusionMasks.map((m: any, index: number) => {
-                   // Convert percentages (0-100) to unit interval (0-1), dropping leading zero if present for compactness
                    const formatVal = (val: number) => (val / 100).toFixed(6).replace(/^0\./, '.');
-                   
                    const l = formatVal(m.x);
                    const t = formatVal(m.y);
                    const w = formatVal(m.w);
                    const h = formatVal(m.h);
-                   const cIndex = index + 1; // 1-based index for clozes
-                   
-                   // Format: {{c1::image-occlusion:rect:left=.1568:top=.4364:width=.576:height=.2408:oi=1}}
+                   const cIndex = index + 1; 
                    return `{{c${cIndex}::image-occlusion:rect:left=${l}:top=${t}:width=${w}:height=${h}:oi=1}}`;
                });
-               
-               // Join with spaces or newlines? Usually purely adjacent or spaces.
                fields[configFields.mask] = maskStrings.join('');
           }
-
-          const note = {
-              deckName: deckName,
-              modelName: modelName,
-              fields: fields,
-              tags: tags || []
-          };
-
+          const note = { deckName, modelName, fields, tags: tags || [] };
           try {
               await ankiService.addNote(note);
               showToast(t.noteAdded, 'success');
-              
-              // E. Trigger Video Recording (if requested) AFTER note is created
               if (noteData.includeVideo && activeVideoItem) {
-                  // We need to trigger the recorder to save the clip locally with the filename we just referenced
                   const start = noteData.audioStart || 0;
                   const end = noteData.audioEnd || (start + 5);
-                  
-                  // Use a small delay to ensure UI is responsive
-                  setTimeout(() => {
-                      handleTriggerRecording('video', start, end, videoFilename);
-                  }, 500);
+                  setTimeout(() => { handleTriggerRecording('video', start, end, videoFilename); }, 500);
               }
-
           } catch (e: any) {
               console.error(e);
               showToast(`${t.ankiError}: ${e.message}`, 'error');
           }
       };
-
-      // 2. Decide Flow based on Audio/Video Selection
-      
-      // Case A: Include Audio
       if (noteData.includeAudio && activeVideoItem) {
           if (!configFields.audio) {
               showToast("Warning: Audio field not mapped in settings. Skipping audio.", 'info');
               await executeNoteCreation(undefined);
               return;
           }
-
           showToast(t.recording || "Recording audio segment...", 'info');
-
-          // Intercept the recording callback to handle the blob directly
-          ankiRecordingCallbackRef.current = async (recordedBlob: Blob) => {
-               await executeNoteCreation(recordedBlob);
-          };
-
+          ankiRecordingCallbackRef.current = async (recordedBlob: Blob) => { await executeNoteCreation(recordedBlob); };
           const start = noteData.audioStart || 0;
           const end = noteData.audioEnd || (start + 5);
-          
           handleTriggerRecording('audio', start, end);
           return;
       }
-
-      // Case B: No Audio (Video Only or Image Only)
       await executeNoteCreation(undefined);
   };
 
@@ -1686,9 +1401,7 @@ const App: React.FC = () => {
   const handleOpenAddBookmarkModal = () => {
       setIsPlaying(false);
       setBookmarkModalState({
-          isOpen: true,
-          mode: 'add',
-          time: playedSeconds,
+          isOpen: true, mode: 'add', time: playedSeconds,
           defaultTitle: `${t.bookmarkAt} ${formatTime(playedSeconds)}`,
           defaultNote: ''
       });
@@ -1703,14 +1416,8 @@ const App: React.FC = () => {
   const handleOpenEditBookmarkModal = (bm: Bookmark) => {
       setIsPlaying(false);
       setBookmarkModalState({
-          isOpen: true,
-          mode: 'edit',
-          bookmarkId: bm.id,
-          time: bm.time,
-          end: bm.end,
-          defaultTitle: bm.text,
-          defaultNote: bm.note || '',
-          color: bm.color
+          isOpen: true, mode: 'edit', bookmarkId: bm.id, time: bm.time, end: bm.end,
+          defaultTitle: bm.text, defaultNote: bm.note || '', color: bm.color
       });
   };
 
@@ -1726,25 +1433,17 @@ const App: React.FC = () => {
 
   const handleSaveBookmark = async (title: string, note: string, start?: number, end?: number, color?: string) => {
       if (!activeVideoItem) return;
-      
       const isEdit = bookmarkModalState.mode === 'edit';
       let updatedBookmarks = activeVideoItem.bookmarks ? [...activeVideoItem.bookmarks] : [];
-
       if (isEdit && bookmarkModalState.bookmarkId) {
           updatedBookmarks = updatedBookmarks.map(b => b.id === bookmarkModalState.bookmarkId ? {
               ...b, text: title, note, time: start || b.time, end, color
           } : b);
       } else {
           updatedBookmarks.push({
-              id: crypto.randomUUID(),
-              time: start || playedSeconds,
-              end,
-              text: title,
-              note,
-              color
+              id: crypto.randomUUID(), time: start || playedSeconds, end, text: title, note, color
           });
       }
-
       const updatedItem = { ...activeVideoItem, bookmarks: updatedBookmarks };
       await saveVideo(updatedItem);
       setLibraryItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
@@ -1755,27 +1454,17 @@ const App: React.FC = () => {
 
   const handleTriggerRecording = (type: 'video' | 'audio', start: number, end: number, specificFilename?: string) => {
       if (!playerRef.current) return;
-      
-      // Use .weba for audio container to distinguish it locally, but Anki logic uses specificFilename override
       const ext = type === 'video' ? 'webm' : 'weba';
       const filename = specificFilename || `${type}_${Date.now()}.${ext}`;
       setRecordingTarget({ start, end, filename }); 
       setRecorderMode(type);
       playerRef.current.seekTo(start, 'seconds');
       setIsPlaying(true);
-      
-      // Delay recording start to allow seek to finish
-      setTimeout(() => {
-          handleStartRecording(type);
-      }, 500); 
+      setTimeout(() => { handleStartRecording(type); }, 500); 
   };
 
-  // END NEW FUNCTIONS
-
   return (
-    <div className={`min-h-screen flex flex-col font-sans ${viewMode === 'player' ? 'bg-black' : ''}`}>
-      
-      {/* Toast Notification */}
+    <div className={`fixed inset-0 h-[100dvh] w-[100vw] flex flex-col font-sans ${viewMode === 'player' ? 'bg-black' : ''}`}>
       {notification && (
           <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-full shadow-2xl backdrop-blur-md font-bold text-sm animate-in slide-in-from-top-2 fade-in duration-300 flex items-center gap-2 ${
               notification.type === 'success' ? 'bg-green-500/90 text-white' : 
@@ -1790,43 +1479,20 @@ const App: React.FC = () => {
       )}
 
       <Header 
-        viewMode={viewMode}
-        onBackToLibrary={handleBackToLibrary}
-        activeVideoItem={activeVideoItem}
-        ankiConfig={ankiConfig}
-        ocrMode={ocrMode}
-        onToggleOcrMode={toggleOcrMode}
-        capturedClips={capturedClips}
-        showClipsList={showClipsList}
-        onToggleClipsList={() => setShowClipsList(!showClipsList)}
-        onCloseClipsList={() => setShowClipsList(false)}
-        onPlayClip={setPlaybackClip}
-        onDeleteClip={handleDeleteClip}
-        mediaType={mediaType}
-        setMediaType={setMediaType}
-        onOpenSettings={() => setShowSettings(true)}
-        isFullscreen={isFullscreen}
-        lang={lang}
+        viewMode={viewMode} onBackToLibrary={handleBackToLibrary} activeVideoItem={activeVideoItem} ankiConfig={ankiConfig}
+        ocrMode={ocrMode} onToggleOcrMode={toggleOcrMode} capturedClips={capturedClips} showClipsList={showClipsList}
+        onToggleClipsList={() => setShowClipsList(!showClipsList)} onCloseClipsList={() => setShowClipsList(false)}
+        onPlayClip={setPlaybackClip} onDeleteClip={handleDeleteClip} mediaType={mediaType} setMediaType={setMediaType}
+        onOpenSettings={() => setShowSettings(true)} isFullscreen={isFullscreen} lang={lang}
       />
 
       <SettingsSidebar 
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        lang={lang}
-        setLang={setLang}
-        learningLang={learningLang}
-        setLearningLang={setLearningLang}
-        ankiConfig={ankiConfig}
-        setAnkiConfig={setAnkiConfig}
-        ankiConnected={ankiConnected}
-        onConnectCheck={handleAnkiConnect}
-        onExportData={handleExportData}
-        onImportData={handleImportData}
-        onClearCache={handleClearCache}
-        importInputRef={importInputRef}
+        isOpen={showSettings} onClose={() => setShowSettings(false)} lang={lang} setLang={setLang}
+        learningLang={learningLang} setLearningLang={setLearningLang} ankiConfig={ankiConfig} setAnkiConfig={setAnkiConfig}
+        ankiConnected={ankiConnected} onConnectCheck={handleAnkiConnect} onExportData={handleExportData}
+        onImportData={handleImportData} onClearCache={handleClearCache} importInputRef={importInputRef}
       />
       
-      {/* Playback Clip Modal */}
       {playbackClip && (
           <div className="fixed inset-0 z-[150] bg-black/80 flex items-center justify-center backdrop-blur-sm p-4">
               <div className="bg-[#1e293b] rounded-xl overflow-hidden max-w-4xl w-full shadow-2xl border border-white/10">
@@ -1835,81 +1501,53 @@ const App: React.FC = () => {
                       <button onClick={() => setPlaybackClip(null)}><X className="text-white"/></button>
                   </div>
                   <div className="aspect-video bg-black flex items-center justify-center">
-                      <video 
-                          src={playbackClip.src} 
-                          controls 
-                          autoPlay 
-                          className="max-w-full max-h-[70vh]" 
-                      />
+                      <video src={playbackClip.src} controls autoPlay className="max-w-full max-h-[70vh]" />
                   </div>
               </div>
           </div>
       )}
 
-      <main className="flex-1 flex flex-col items-center">
+      <main className="flex-1 overflow-hidden relative">
         {viewMode === 'library' ? (
-            <VideoLibrary 
-                items={libraryItems} 
-                lang={lang} 
-                onSelectSample={handleSampleSelect} 
-                onImportLocalFile={handleImportLocalFile} 
-                onAddNetworkVideo={handleAddNetworkVideo} 
-                onDeleteVideo={handleDeleteVideo} 
-                onImportSubtitleAndPlay={handleImportSubtitleAndPlay}
-                onUpdateLocalVideo={handleUpdateLocalVideo}
-            />
+            <div className="h-full overflow-y-auto w-full flex flex-col items-center">
+                <VideoLibrary 
+                    items={libraryItems} lang={lang} onSelectSample={handleSampleSelect} onImportLocalFile={handleImportLocalFile} 
+                    onAddNetworkVideo={handleAddNetworkVideo} onDeleteVideo={handleDeleteVideo} onImportSubtitleAndPlay={handleImportSubtitleAndPlay}
+                    onUpdateLocalVideo={handleUpdateLocalVideo}
+                />
+            </div>
         ) : (
             <div ref={playerContainerRef} className={mainContainerClasses}>
                 <div className={playerWrapperClasses} onMouseMove={handlePlayerMouseMove} onClick={handlePlayerMouseMove} onTouchStart={handlePlayerMouseMove}>
-                    
-                    {/* Buffering Indicator */}
                     {isBuffering && (
                         <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
                             <Loader2 className="w-12 h-12 text-white animate-spin opacity-50" />
                         </div>
                     )}
-                    
-                    {/* Recording Indicator */}
                     {isRecordingRef.current && (
                          <div className={`absolute top-12 left-1/2 -translate-x-1/2 z-50 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-2 ${recorderModeRef.current === 'audio' ? 'bg-pink-500/80' : 'bg-red-500/80'}`}>
                              <span className="w-2 h-2 bg-white rounded-full"></span>
                              {recorderModeRef.current === 'audio' ? 'REC AUDIO' : 'REC VIDEO'}
                          </div>
                     )}
-
-                    <div ref={videoWrapperRef} className={`relative bg-black overflow-hidden flex items-center justify-center group/video transition-all duration-300 ${isFullscreen && activeFullscreenPanel !== 'none' ? 'w-[calc(100%-400px)] h-full mr-auto' : 'w-full h-full'}`} style={{ isolation: 'isolate' }}>
-                        
-                        {/* --- Top Overlay Controls --- */}
+                    <div ref={videoWrapperRef} className={`relative bg-black overflow-hidden flex items-center justify-center group/video transition-all duration-300 w-full h-full`} style={{ isolation: 'isolate' }}>
                         <div className={`absolute top-0 left-0 right-0 z-50 p-2 bg-gradient-to-t from-black/20 to-transparent transition-opacity duration-300 flex justify-between items-start pointer-events-none ${isControlsVisible ? 'opacity-100' : 'opacity-0'}`}>
                             <div className="flex items-center gap-4 pointer-events-auto ml-2">
-                                {/* Lock Button */}
-                                <button 
-                                    onClick={toggleLock} 
-                                    className={`p-2 rounded-full transition-all duration-300 ${controlsLock === 'visible' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white'}`}
-                                    title={controlsLock ? "Unlock Controls" : "Lock Controls"}
-                                >
+                                <button onClick={toggleLock} className={`p-2 rounded-full transition-all duration-300 ${controlsLock === 'visible' ? 'bg-primary text-white shadow-lg shadow-primary/30' : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white'}`}>
                                     {controlsLock ? <Lock size={20} /> : <Unlock size={20} />}
                                 </button>
-                                <div className="flex flex-col">
-                                    {abLoopState !== 'none' && <span className="text-primary text-xs font-bold font-mono mt-1">Loop: {formatTime(loopA)} - {abLoopState === 'looping' ? formatTime(loopB) : '...'}</span>}
-                                </div>
+                                {abLoopState !== 'none' && <span className="text-primary text-xs font-bold font-mono mt-1">Loop: {formatTime(loopA)} - {abLoopState === 'looping' ? formatTime(loopB) : '...'}</span>}
                             </div>
-                            
                             <div className="pointer-events-auto flex gap-2">
-                                {/* OCR Button (Moved Here for Visibility and Ease of Use) */}
                                 {ankiConfig.ocrEnabled && (
-                                    <button onClick={handleOcrClick} className={`bg-white/10 hover:bg-white/20 p-2.5 rounded-full backdrop-blur-sm transition-all ${ocrMode === 'dictionary' ? 'text-amber-400' : 'text-white'}`} title={t.ocrTitle}>
+                                    <button onClick={handleOcrClick} className={`bg-white/10 hover:bg-white/20 p-2.5 rounded-full backdrop-blur-sm transition-all ${ocrMode === 'dictionary' ? 'text-amber-400' : 'text-white'}`}>
                                         {ocrMode === 'dictionary' ? <Zap size={20} className="fill-current"/> : <ScanText size={20} />}
                                     </button>
                                 )}
-
-                                {/* Screenshot / IO Button */}
-                                <button onClick={handleScreenshotClick} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all" title={t.screenshot}><Camera size={20} /></button>
-
-                                {/* Bookmark Controls */}
-                                <button onClick={handleOpenAddBookmarkModal} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all" title={t.addBookmark}><BookmarkPlus size={20} /></button>
+                                <button onClick={handleScreenshotClick} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><Camera size={20} /></button>
+                                <button onClick={handleOpenAddBookmarkModal} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><BookmarkPlus size={20} /></button>
                                 <div className="relative">
-                                    <button onClick={() => setShowBookmarkList(!showBookmarkList)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all" title={t.bookmarks}><Book size={20} /></button>
+                                    <button onClick={() => setShowBookmarkList(!showBookmarkList)} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><Book size={20} /></button>
                                     {showBookmarkList && (
                                         <div className="absolute top-full right-0 mt-2 bg-[#1e293b] rounded-xl shadow-2xl border border-white/10 w-72 p-2 z-[60] animate-in fade-in zoom-in-95 max-h-[60vh] flex flex-col">
                                             <h4 className="text-xs font-bold text-white mb-2 px-2 uppercase sticky top-0 bg-[#1e293b] z-10 py-1">{t.bookmarks}</h4>
@@ -1917,30 +1555,22 @@ const App: React.FC = () => {
                                                 {(!activeVideoItem?.bookmarks || activeVideoItem.bookmarks.length === 0) ? (
                                                     <p className="text-xs text-slate-500 px-2 py-2 text-center">{t.noBookmarks}</p>
                                                 ) : (
-                                                    // Use spread operator to avoid mutating the original array
                                                     [...activeVideoItem.bookmarks].sort((a,b) => a.time - b.time).map(bm => (
                                                         <div key={bm.id} className="p-2 hover:bg-white/10 rounded group border border-transparent hover:border-white/5 transition-all">
                                                             <div className="flex items-center justify-between mb-1">
                                                                 <button onClick={() => handleJumpToBookmark(bm.time, bm.end)} className="text-xs text-slate-200 hover:text-primary text-left flex-1 truncate font-semibold flex items-center gap-2">
                                                                     <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: bm.color || '#6366f1' }}></div>
                                                                     <span className="font-mono text-primary mr-2 opacity-80 flex-shrink-0">
-                                                                        {formatTime(bm.time)}
-                                                                        {bm.end && ` - ${formatTime(bm.end)}`}
+                                                                        {formatTime(bm.time)}{bm.end && ` - ${formatTime(bm.end)}`}
                                                                     </span>
                                                                     <span className="truncate">{bm.text}</span>
                                                                 </button>
                                                                 <div className="flex items-center gap-1">
-                                                                    <button onClick={() => handleOpenEditBookmarkModal(bm)} className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/10" title={t.editBookmark}>
-                                                                        <Edit2 size={12} />
-                                                                    </button>
-                                                                    <button onClick={() => handleDeleteBookmark(bm.id)} className="p-1 text-slate-400 hover:text-red-400 rounded hover:bg-red-500/10">
-                                                                        <Trash2 size={12} />
-                                                                    </button>
+                                                                    <button onClick={() => handleOpenEditBookmarkModal(bm)} className="p-1 text-slate-400 hover:text-white rounded hover:bg-white/10"><Edit2 size={12} /></button>
+                                                                    <button onClick={() => handleDeleteBookmark(bm.id)} className="p-1 text-slate-400 hover:text-red-400 rounded hover:bg-red-500/10"><Trash2 size={12} /></button>
                                                                 </div>
                                                             </div>
-                                                            {bm.note && (
-                                                                <p className="text-[10px] text-slate-500 line-clamp-2 pl-4 border-l-2 border-white/10 ml-1">{bm.note}</p>
-                                                            )}
+                                                            {bm.note && <p className="text-[10px] text-slate-500 line-clamp-2 pl-4 border-l-2 border-white/10 ml-1">{bm.note}</p>}
                                                         </div>
                                                     ))
                                                 )}
@@ -1948,241 +1578,89 @@ const App: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-
-                                <button onClick={() => { setSelectedWord(''); isFullscreen ? setActiveFullscreenPanel('dictionary') : setDictOpen(true); }} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all" title={t.dictionary}><BookA size={20} /></button>
-                                <button onClick={() => setShowMask(!showMask)} className={`bg-white/10 hover:bg-white/20 p-2.5 rounded-full backdrop-blur-sm transition-all ${showMask ? 'text-primary' : 'text-white'}`} title={t.toggleMask}><EyeOff size={20} /></button>
-                                <button onClick={handleQuickCard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all" title={t.quickCard}><PlusSquare size={20} /></button>
+                                <button onClick={() => { setSelectedWord(''); isFullscreen ? setActiveFullscreenPanel('dictionary') : setDictOpen(true); }} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><BookA size={20} /></button>
+                                <button onClick={() => setShowMask(!showMask)} className={`bg-white/10 hover:bg-white/20 p-2.5 rounded-full backdrop-blur-sm transition-all ${showMask ? 'text-primary' : 'text-white'}`}><EyeOff size={20} /></button>
+                                <button onClick={handleQuickCard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><PlusSquare size={20} /></button>
                             </div>
                         </div>
-
-                        <div className={`w-full h-full ${mediaType === 'audio' ? 'hidden' : 'block'}`}>
+                        <div className={`w-full h-full flex items-center justify-center ${mediaType === 'audio' ? 'hidden' : 'block'}`}>
                             <Player 
                                 key={`${activeVideoItem?.id}-${isM3U8}`}
-                                ref={playerRef} 
-                                url={activeVideoItem?.src} 
-                                width="100%" 
-                                height="100%" 
-                                playing={isPlaying} 
-                                controls={false} 
-                                onProgress={handleProgress} 
-                                onDuration={handleDuration} 
-                                onEnded={() => setIsPlaying(false)} 
-                                onBuffer={() => setIsBuffering(true)}
-                                onBufferEnd={() => setIsBuffering(false)}
-                                progressInterval={100} 
+                                ref={playerRef} url={activeVideoItem?.src} width="100%" height="100%" playing={isPlaying} 
+                                controls={false} onProgress={handleProgress} onDuration={handleDuration} onEnded={() => setIsPlaying(false)} 
+                                onBuffer={() => setIsBuffering(true)} onBufferEnd={() => setIsBuffering(false)} progressInterval={100} 
                                 onReady={() => {
                                     if (!onReadyRef.current) {
                                       if (!activeVideoItem?.isLive) {
                                           const saved = localStorage.getItem(`vam_progress_${activeVideoItem?.id}`);
                                           if (saved) {
                                             const time = parseFloat(saved);
-                                            setTimeout(() => {
-                                              if (playerRef.current && !seekLockRef.current) {
-                                                playerRef.current.seekTo(time, 'seconds');
-                                                setPlayedSeconds(time);
-                                              }
-                                            }, 300);
+                                            setTimeout(() => { if (playerRef.current && !seekLockRef.current) { playerRef.current.seekTo(time, 'seconds'); setPlayedSeconds(time); } }, 300);
                                           }
-                                      } else {
-                                          setPlayedSeconds(0); 
-                                      }
+                                      } else { setPlayedSeconds(0); }
                                       onReadyRef.current = true;
-                                      
                                       const pollForDimensions = (retries = 20) => { 
-                                          if (retries <= 0) {
-                                              return;
-                                          }
+                                          if (retries <= 0) return;
                                           const videoEl = playerRef.current?.getInternalPlayer();
-                                          if (videoEl && videoEl.videoWidth > 0) {
-                                              calculateGeometry();
-                                          } else {
-                                              setTimeout(() => pollForDimensions(retries - 1), 100);
-                                          }
+                                          if (videoEl && videoEl.videoWidth > 0) { calculateGeometry(); } 
+                                          else { setTimeout(() => pollForDimensions(retries - 1), 100); }
                                       };
                                       pollForDimensions();
                                     }
                                 }}
-                                config={{
-                                    file: {
-                                        forceHLS: isM3U8,
-                                        attributes: {
-                                            crossOrigin: 'anonymous', // Force anonymous for CORS support
-                                            playsInline: true,
-                                            referrerPolicy: 'no-referrer' 
-                                        },
-                                        hlsOptions: {
-                                            enableWorker: false, 
-                                            startLevel: -1,
-                                            manifestLoadingTimeOut: 20000,
-                                            manifestLoadingMaxRetry: 6,
-                                            manifestLoadingRetryDelay: 500,
-                                            levelLoadingTimeOut: 20000,
-                                            levelLoadingMaxRetry: 6,
-                                            levelLoadingRetryDelay: 500,
-                                            fragLoadingTimeOut: 30000,
-                                            fragLoadingMaxRetry: 6,
-                                            fragLoadingRetryDelay: 500,
-                                            backBufferLength: 300 
-                                        }
-                                    }
-                                }}
-                                onError={handlePlayerError}
-                                style={{ pointerEvents: 'none' }} 
+                                config={{ file: { forceHLS: isM3U8, attributes: { crossOrigin: 'anonymous', playsInline: true, referrerPolicy: 'no-referrer' }, hlsOptions: { enableWorker: false, startLevel: -1 } } }}
+                                onError={handlePlayerError} style={{ pointerEvents: 'none' }} 
                             />
                             <div className="absolute inset-0 z-10" onClick={togglePlay}></div>
                         </div>
-                        
                         {mediaType === 'audio' && (
                             <div className="flex flex-col items-center gap-6 animate-fade-in z-0 w-full h-full justify-center bg-slate-900">
                                 <div className="relative w-48 h-48 md:w-64 md:h-64 rounded-xl shadow-2xl overflow-hidden border border-white/10">
-                                    {activeVideoItem?.thumbnail ? (
-                                      <img src={activeVideoItem.thumbnail} className="w-full h-full object-cover" alt="Cover" /> 
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center bg-slate-800"><FileAudio size={64} className="text-slate-400" /></div>
-                                    )}
+                                    {activeVideoItem?.thumbnail ? <img src={activeVideoItem.thumbnail} className="w-full h-full object-cover" alt="Cover" /> : <div className="w-full h-full flex items-center justify-center bg-slate-800"><FileAudio size={64} className="text-slate-400" /></div>}
                                 </div>
                                 <h3 className="text-2xl font-light text-slate-300 max-w-md text-center">{activeVideoItem?.title}</h3>
                             </div>
                         )}
-
                         {!isPlaying && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                                <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl scale-100 transition-transform group-hover/video:scale-110">
+                                <div className="w-20 h-20 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center border border-white/20 shadow-2xl">
                                     <Play className="text-white fill-white ml-2" size={40} />
                                 </div>
                             </div>
                         )}
-
                         {subtitleVisible && isSubtitleActive && (
-                            <div 
-                                className={`absolute left-4 right-4 text-center pointer-events-auto transition-all duration-300 z-30 flex justify-center`}
-                                style={subtitleBottomStyle}
-                            >
+                            <div className={`absolute left-4 right-4 text-center pointer-events-auto transition-all duration-300 z-30 flex justify-center`} style={subtitleBottomStyle}>
                                 {renderCurrentSubtitles()}
                             </div>
                         )}
                     </div>
-                    
-                    {/* Mask Layer is a sibling of the resizing wrapper */}
-                    {showMask && (
-                        <div 
-                            className="absolute backdrop-blur-xl bg-white/5 border-y border-white/10 z-20 flex group/mask"
-                            style={maskStyle}
-                        >
-                            {/* Left Move Zone */}
-                            <div 
-                                className="flex-1 cursor-ns-resize"
-                                onMouseDown={(e) => handleMaskMouseDown(e, 'move')}
-                                onTouchStart={(e) => handleMaskMouseDown(e, 'move')}
-                            />
-
-                            {/* Center Resize Zone */}
-                            <div 
-                                className="w-24 cursor-row-resize hover:bg-white/5 transition-colors border-x border-white/5"
-                                onMouseDown={(e) => handleMaskMouseDown(e, 'resize')}
-                                onTouchStart={(e) => handleMaskMouseDown(e, 'resize')}
-                            />
-
-                            {/* Right Move Zone */}
-                            <div 
-                                className="flex-1 cursor-ns-resize"
-                                onMouseDown={(e) => handleMaskMouseDown(e, 'move')}
-                                onTouchStart={(e) => handleMaskMouseDown(e, 'move')}
-                            />
-                        </div>
-                    )}
-                    
+                    {showMask && <div className="absolute backdrop-blur-xl bg-white/5 border-y border-white/10 z-20 flex group/mask" style={maskStyle}><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /><div className="w-24 cursor-row-resize hover:bg-white/5 transition-colors border-x border-white/5" onMouseDown={(e) => handleMaskMouseDown(e, 'resize')} onTouchStart={(e) => handleMaskMouseDown(e, 'resize')} /><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /></div>}
                     <PlayerControls 
-                        isControlsVisible={isControlsVisible}
-                        isLiveStream={isLiveStream}
-                        playedSeconds={playedSeconds}
-                        duration={duration}
-                        onSeekMouseDown={handleSeekMouseDown}
-                        onSeekChange={handleSeekChange}
-                        onSeekMouseUp={handleSeekMouseUp}
-                        isPlaying={isPlaying}
-                        onTogglePlay={togglePlay}
-                        onJumpSubtitle={jumpToSubtitle}
-                        abLoopState={abLoopState}
-                        abButtonMode={ankiConfig.abButtonMode || 'loop'}
-                        onABLoopClick={handleABLoopClick}
-                        showSubSettings={showSubSettings}
-                        setShowSubSettings={setShowSubSettings}
-                        subtitleOffset={subtitleOffset}
-                        setSubtitleOffset={setSubtitleOffset}
-                        subtitleMode={subtitleMode}
-                        onCycleSubtitleMode={cycleSubtitleMode}
-                        subtitleVisible={subtitleVisible}
-                        setSubtitleVisible={setSubtitleVisible}
-                        activeFullscreenPanel={activeFullscreenPanel}
-                        showTranscript={showTranscript}
-                        onToggleTranscript={toggleTranscript}
-                        isFullscreen={isFullscreen}
-                        onToggleFullscreen={toggleFullscreen}
-                        lang={lang}
+                        isControlsVisible={isControlsVisible} isLiveStream={isLiveStream} playedSeconds={playedSeconds} duration={duration} onSeekMouseDown={handleSeekMouseDown} onSeekChange={handleSeekChange} onSeekMouseUp={handleSeekMouseUp}
+                        isPlaying={isPlaying} onTogglePlay={togglePlay} onJumpSubtitle={jumpToSubtitle} abLoopState={abLoopState} abButtonMode={ankiConfig.abButtonMode || 'loop'} onABLoopClick={handleABLoopClick} showSubSettings={showSubSettings} setShowSubSettings={setShowSubSettings}
+                        subtitleOffset={subtitleOffset} setSubtitleOffset={setSubtitleOffset} subtitleMode={subtitleMode} onCycleSubtitleMode={cycleSubtitleMode} subtitleVisible={subtitleVisible} setSubtitleVisible={setSubtitleVisible} activeFullscreenPanel={activeFullscreenPanel}
+                        showTranscript={showTranscript} onToggleTranscript={toggleTranscript} isFullscreen={isFullscreen} onToggleFullscreen={toggleFullscreen} lang={lang}
                     />
-
                     {isAnkiModalOpen && <AnkiEditModal 
-                        isOpen={isAnkiModalOpen} 
-                        onClose={() => setIsAnkiModalOpen(false)} 
-                        onConfirm={handleConfirmAddNote} 
-                        initialData={pendingNote} 
-                        lang={lang}
-                        learningLang={learningLang}
-                        currentPlayerTime={playedSeconds}
-                        duration={duration}
-                        subtitles={subtitles}
-                        onRetakeImage={handleRetakeImage}
-                        onSeek={handleSeekTo}
-                        onPlayAudioRange={handlePreviewAudio}
-                        isOcclusionMode={ankiModalMode === 'occlusion'}
+                        isOpen={isAnkiModalOpen} onClose={() => setIsAnkiModalOpen(false)} onConfirm={handleConfirmAddNote} initialData={pendingNote} lang={lang} learningLang={learningLang} currentPlayerTime={playedSeconds} duration={duration} subtitles={subtitles}
+                        onRetakeImage={handleRetakeImage} onSeek={handleSeekTo} onPlayAudioRange={handlePreviewAudio} isOcclusionMode={ankiModalMode === 'occlusion'}
                     />}
-
-                    {/* Bookmark Modal - Now inside Player Container for Fullscreen support */}
                     <BookmarkModal 
-                        isOpen={bookmarkModalState.isOpen}
-                        onClose={() => setBookmarkModalState(prev => ({...prev, isOpen: false}))}
-                        onConfirm={handleSaveBookmark}
-                        onRecordVideo={(start, end) => handleTriggerRecording('video', start, end)}
-                        onRecordAudio={(start, end) => handleTriggerRecording('audio', start, end)}
-                        initialTitle={bookmarkModalState.defaultTitle}
-                        initialNote={bookmarkModalState.defaultNote}
-                        initialTime={bookmarkModalState.time || 0}
-                        initialEnd={bookmarkModalState.end}
-                        initialColor={bookmarkModalState.color}
-                        isEditing={bookmarkModalState.mode === 'edit'}
-                        lang={lang}
-                        duration={duration}
+                        isOpen={bookmarkModalState.isOpen} onClose={() => setBookmarkModalState(prev => ({...prev, isOpen: false}))} onConfirm={handleSaveBookmark} onRecordVideo={(start, end) => handleTriggerRecording('video', start, end)} onRecordAudio={(start, end) => handleTriggerRecording('audio', start, end)}
+                        initialTitle={bookmarkModalState.defaultTitle} initialNote={bookmarkModalState.defaultNote} initialTime={bookmarkModalState.time || 0} initialEnd={bookmarkModalState.end} initialColor={bookmarkModalState.color} isEditing={bookmarkModalState.mode === 'edit'} lang={lang} duration={duration}
                     />
-
-                    {/* OCR Result & Capture Modal */}
                     {ocrResult !== null && (
-                        <OCRModal 
-                            ocrResult={ocrResult}
-                            onClose={() => setOcrResult(null)}
-                            onRetake={handleOcrRetake}
-                            isProcessing={isOcrProcessing}
-                            onExecute={executeOcr}
-                            editMode={ocrEditMode}
-                            setEditMode={setOcrEditMode}
-                            bounds={ocrBounds}
-                            setBounds={setOcrBounds}
-                            imageRef={ocrImageRef}
-                            wrapperRef={ocrWrapperRef}
-                            renderTextContent={renderLine}
-                            lang={lang}
-                            ocrLang={ankiConfig.ocrLang || 'eng'}
+                        <OCRModal ocrResult={ocrResult} onClose={() => setOcrResult(null)} onRetake={handleOcrRetake} isProcessing={isOcrProcessing} onExecute={executeOcr} editMode={ocrEditMode} setEditMode={setOcrEditMode}
+                            bounds={ocrBounds} setBounds={setOcrBounds} imageRef={ocrImageRef} wrapperRef={ocrWrapperRef} renderTextContent={renderLine} lang={lang} ocrLang={ankiConfig.ocrLang || 'eng'}
                         />
                     )}
-
                     {isFullscreen && (
                         <>
                             <DictionaryPanel 
                                 word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} 
                                 isOpen={activeFullscreenPanel === 'dictionary'} onClose={handleDictClose} variant="sidebar" 
                                 learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length}
-                                lang={lang}
-                                searchEngine={ankiConfig.searchEngine}
+                                lang={lang} searchEngine={ankiConfig.searchEngine}
                             />
                             <TranscriptPanel isOpen={activeFullscreenPanel === 'transcript'} onClose={() => setActiveFullscreenPanel('none')} subtitles={subtitles} currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} variant="sidebar" lang={lang} />
                         </>
@@ -2195,28 +1673,15 @@ const App: React.FC = () => {
       {!isFullscreen && (
         <>
             <DictionaryPanel 
-                word={selectedWord} 
-                sentence={selectedSentence} 
-                onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} 
-                isAddingToAnki={isAddingToAnki} 
-                isOpen={dictOpen} 
-                onClose={handleDictClose} 
-                variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
-                learningLanguage={learningLang} 
-                onAppendNext={handleAppendWord} 
-                canAppend={nextSegmentIndex < currentSegments.length} 
-                lang={lang} 
-                searchEngine={ankiConfig.searchEngine} 
+                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence) => addToAnki(term, def, sentence)} isAddingToAnki={isAddingToAnki} 
+                isOpen={dictOpen} onClose={handleDictClose} variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
+                learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length} 
+                lang={lang} searchEngine={ankiConfig.searchEngine} 
             />
             <TranscriptPanel 
-                isOpen={showTranscript} 
-                onClose={() => setShowTranscript(false)} 
-                subtitles={subtitles} 
-                currentSubtitleIndex={currentSubtitleIndex} 
-                onSeek={handleSeekTo} 
-                subtitleOffset={subtitleOffset} 
-                variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
-                lang={lang} 
+                isOpen={showTranscript} onClose={() => setShowTranscript(false)} subtitles={subtitles} 
+                currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} 
+                variant={isWideScreen ? "sidebar" : "bottom-sheet"} lang={lang} 
             />
         </>
       )}
