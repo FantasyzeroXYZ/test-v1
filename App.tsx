@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactPlayer from 'react-player';
 import Tesseract from 'tesseract.js';
-import { Subtitle, MediaType, AnkiConfig, VideoLibraryItem, SubtitleMode, UILanguage, LearningLanguage, AnkiNoteData, Bookmark, ABLoopMode, CapturedClip, ABButtonMode, KeyboardShortcut } from './types';
+import { Subtitle, MediaType, AnkiConfig, VideoLibraryItem, SubtitleMode, UILanguage, LearningLanguage, AnkiNoteData, Bookmark, ABLoopMode, CapturedClip, ABButtonMode } from './types';
 import { formatTime, parseSRT, parseVTT, parseASS, generateVideoThumbnail, captureVideoFrame, extractAudioClip, recordAudioFromPlayer, getEventY, getSupportedMimeType, downloadBlob, blobToBase64 } from './utils';
 import { ankiService, setAnkiAddress } from './services/ankiService';
 import { initDB, saveVideo, getLibrary, getVideoFile, deleteVideo, exportAllData, importAllData, clearAllData, saveClip, getClips, deleteClip } from './services/storageService';
@@ -20,23 +20,6 @@ import {
   Play, Loader2, Lock, Unlock, BookmarkPlus, Book, Camera, BookA, EyeOff, PlusSquare, ScanText, Zap,
   CheckCircle, AlertCircle, Info, X, Edit2, Trash2, FileAudio, Mic, Video
 } from 'lucide-react';
-
-// Define default keyboard shortcuts
-const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcut[] = [
-  { action: 'playPause', defaultKey: 'Space', description: 'shortcutPlayPause' },
-  { action: 'prevSub', defaultKey: 'ArrowLeft', description: 'shortcutPrevSub' },
-  { action: 'nextSub', defaultKey: 'ArrowRight', description: 'shortcutNextSub' },
-  { action: 'toggleDict', defaultKey: 'KeyD', description: 'shortcutToggleDict' },
-  { action: 'toggleTranscript', defaultKey: 'KeyT', description: 'shortcutToggleTranscript' },
-  { action: 'quickCard', defaultKey: 'KeyQ', description: 'shortcutQuickCard' },
-  { action: 'toggleMask', defaultKey: 'KeyM', description: 'shortcutToggleMask' },
-  { action: 'toggleFullscreen', defaultKey: 'KeyF', description: 'shortcutToggleFullscreen' },
-  { action: 'setABLoopA', defaultKey: 'KeyA', description: 'shortcutSetA' },
-  { action: 'setABLoopB', defaultKey: 'KeyB', description: 'shortcutSetB' },
-  { action: 'clearABLoop', defaultKey: 'KeyC', description: 'shortcutClearAB' },
-  { action: 'performOCR', defaultKey: 'KeyO', description: 'shortcutOcr' },
-];
-
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<UILanguage>('zh');
@@ -121,7 +104,7 @@ const App: React.FC = () => {
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [ocrResult, setOcrResult] = useState<{ text: string | null; image: string; debug?: any } | null>(null);
   const [ocrMode, setOcrMode] = useState<'standard' | 'dictionary'>('standard');
-  const [ocrBounds, setOcrBounds] = useState<{top: number; bottom: number; left: number; right: number}>({ top: 70, bottom: 90, left: 10, right: 90 });
+  const [ocrBounds, setOcrBounds] = useState<{top: number, bottom: number, left: number, right: number}>({ top: 70, bottom: 90, left: 10, right: 90 });
   const [ocrEditMode, setOcrEditMode] = useState<'vertical' | 'horizontal'>('vertical');
   
   const ocrImageRef = useRef<HTMLImageElement>(null);
@@ -139,8 +122,7 @@ const App: React.FC = () => {
     abButtonMode: 'loop',
     ocrLang: 'eng',
     ocrEnabled: false,
-    keyboardShortcutsEnabled: true, // Default to enabled
-    customKeybindings: {}, // Default empty custom keybindings
+    keyboardShortcutsEnabled: true // Default to true
   });
 
   const playerRef = useRef<any>(null);
@@ -301,7 +283,6 @@ const App: React.FC = () => {
           if (!config.ocrLang) config.ocrLang = 'eng';
           if (typeof config.ocrEnabled === 'undefined') config.ocrEnabled = false;
           if (typeof config.keyboardShortcutsEnabled === 'undefined') config.keyboardShortcutsEnabled = true; // Default to true
-          if (!config.customKeybindings) config.customKeybindings = {};
           setAnkiConfig(config);
       }
       const savedLang = localStorage.getItem('vam_ui_lang');
@@ -504,7 +485,7 @@ const App: React.FC = () => {
           console.error("Recording failed", e);
           showToast(t.recordingFailed, 'error');
       }
-  }, [t, showToast, getSupportedMimeType]);
+  }, [t, showToast]);
 
   const handleStopRecording = useCallback(() => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -559,7 +540,7 @@ const App: React.FC = () => {
       if (newIndex !== currentSubtitleIndex) {
         setCurrentSubtitleIndex(newIndex);
       }
-  }, [abLoopState, loopA, loopB, activeVideoItem, subtitles, subtitleOffset, currentSubtitleIndex, isSeeking, recordingTarget, handleStopRecording, setIsPlaying, setPlayedSeconds, isRecordingRef]);
+  }, [abLoopState, loopA, loopB, isPlaying, playedSeconds, activeVideoItem, subtitles, subtitleOffset, currentSubtitleIndex, isSeeking, ankiConfig.abButtonMode, recordingTarget, handleStopRecording]);
 
   const togglePlay = useCallback(() => {
       setIsPlaying(prev => !prev);
@@ -850,7 +831,7 @@ const App: React.FC = () => {
           }
           const noteData: AnkiNoteData = {
               word: term,
-              definition: scriptHtmlDef || definition, // Use scriptHtmlDef if provided
+              definition: scriptHtmlDef || definition, // Use scriptHtmlDef if provided, otherwise the 'definition' argument
               sentence: processedSentence,
               translation: translation || getActiveSubtitleText(secondarySubtitles, playedSeconds) || "",
               imageData: imageData,
@@ -917,14 +898,14 @@ const App: React.FC = () => {
           playerRef.current.seekTo(time, 'seconds');
           setPlayedSeconds(time);
       }
-  }, [setPlayedSeconds]);
+  }, []);
   
   const handlePreviewAudio = useCallback((start: number, end: number) => {
       if (!playerRef.current) return;
       playerRef.current.seekTo(start, 'seconds');
       setIsPlaying(true);
       setTimeout(() => setIsPlaying(false), (end - start) * 1000);
-  }, [setIsPlaying]);
+  }, []);
 
   const jumpToSubtitle = (offset: number) => {
     if (subtitles.length === 0) {
@@ -1145,10 +1126,13 @@ const App: React.FC = () => {
   const mainContainerClasses = viewMode === 'library' ? "w-full max-w-7xl px-4 md:px-6 py-6" : "w-full h-full overflow-hidden bg-black"; 
   const playerWrapperClasses = isFullscreen ? "flex items-center justify-center bg-black overflow-hidden relative w-full h-full" : "w-full h-full relative group bg-black";
   
-  // Calculate height of player controls when visible
-  // PlayerControls has a total height of approximately 85px (padding-bottom + range + main buttons)
-  const fullscreenControlsHeight = 70; // In fullscreen, it's a bit more compact, adjust as needed
-  const nonFullscreenControlsHeight = 85; 
+  // Estimate height of player controls when visible
+  // For non-fullscreen, the PlayerControls div is relative to the bottom of the video,
+  // so the estimate already accounts for the absolute position.
+  // For fullscreen, it's relative to the bottom of the entire screen.
+  // PlayerControls has pb-3 (12px), range input (~24px), main controls (~40px)
+  const fullscreenControlsHeight = 70; // Adjusted based on player controls height
+  const nonFullscreenControlsHeight = 85; // Roughly the height of controls including progress bar and padding
 
   const actualControlBarHeight = isControlsVisible 
     ? (isFullscreen ? fullscreenControlsHeight : nonFullscreenControlsHeight) 
@@ -1210,7 +1194,6 @@ const App: React.FC = () => {
     return src.includes('.m3u8') || src.includes('.m3u') || !!activeVideoItem.isLive;
   }, [activeVideoItem?.src, activeVideoItem?.isLive]);
 
-  // Added `t` to the dependency array
   const handlePlayerError = useCallback((e: any, data?: any, hlsInstance?: any) => {
       if (window.location.protocol === 'https:' && activeVideoItem?.src?.startsWith('http:')) {
           showToast(t.warningMixedContent, 'error');
@@ -1246,7 +1229,7 @@ const App: React.FC = () => {
       } else {
          showToast("Playback Error: Stream might be offline, CORS restricted, or mixed content.", 'error');
       }
-  }, [activeVideoItem, showToast, t]);
+  }, [activeVideoItem, showToast]);
 
   const handleExportData = async () => {
       try {
@@ -1297,7 +1280,6 @@ const App: React.FC = () => {
     if (ankiConfig.abButtonMode === 'record') {
        if (isRecordingRef.current) {
            handleStopRecording();
-           setIsPlaying(false); // Stop playing when recording stops
        } else {
            handleStartRecording(); 
        }
@@ -1318,13 +1300,13 @@ const App: React.FC = () => {
             showToast(t.pointBError, 'error');
             setAbLoopState('none');
         }
-    } else { // Current abLoopState is 'looping'
+    } else {
         setAbLoopState('none');
         setLoopA(0);
         setLoopB(0);
         showToast(t.loopCleared, 'info');
     }
-  }, [abLoopState, loopA, ankiConfig.abButtonMode, handleStartRecording, handleStopRecording, showToast, t, playerRef, setIsPlaying, setLoopA, setLoopB, setAbLoopState, isRecordingRef]);
+  }, [abLoopState, loopA, ankiConfig.abButtonMode, handleStartRecording, handleStopRecording, showToast]);
 
   const handleConfirmAddNote = async (noteData: AnkiNoteData) => {
       setIsAnkiModalOpen(false);
@@ -1502,142 +1484,128 @@ const App: React.FC = () => {
       setTimeout(() => { handleStartRecording(type); }, 500); 
   };
 
-  // Keyboard Shortcuts Logic
-  const executeShortcut = useCallback((action: string) => {
-    if (viewMode !== 'player') return;
-
-    // Actions that should always be allowed
-    if (action === 'toggleFullscreen') {
-        toggleFullscreen();
-        return;
+  // --- Keyboard Shortcuts Effect ---
+  useEffect(() => {
+    if (!ankiConfig.keyboardShortcutsEnabled) {
+      return; // If shortcuts are disabled, don't register listeners
     }
 
-    // Actions only allowed if player controls are visible or locked
-    if (!isControlsVisible && controlsLock !== 'visible') {
-        // Only show controls briefly if an action is attempted while hidden
-        setIsControlsVisible(true);
-        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-        controlsTimeoutRef.current = setTimeout(() => setIsControlsVisible(false), 2000);
-        return; 
-    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent default browser actions for common keys if we handle them
+      const isHandledKey = [' ', 'ArrowLeft', 'ArrowRight', 'd', 't', 'q', 'm', 'f', 'a', 'b', 'c', 'o'].includes(e.key.toLowerCase());
+      if (isHandledKey && e.target instanceof HTMLElement && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+          // Allow default behavior for input fields
+          return;
+      }
 
-    switch (action) {
-        case 'playPause':
-            togglePlay();
-            break;
-        case 'prevSub':
-            jumpToSubtitle(-1); // Use jumpToSubtitle instead of onJumpSubtitle
-            break;
-        case 'nextSub':
-            jumpToSubtitle(1); // Use jumpToSubtitle instead of onJumpSubtitle
-            break;
-        case 'toggleDict':
-            if (isFullscreen) {
-                setActiveFullscreenPanel(prev => prev === 'dictionary' ? 'none' : 'dictionary');
+      if (isHandledKey) {
+        e.preventDefault();
+        e.stopPropagation(); // Stop event propagation to prevent multiple triggers
+      }
+
+      switch (e.key.toLowerCase()) {
+        case ' ': // Play/Pause
+          togglePlay();
+          break;
+        case 'arrowleft': // Previous Subtitle
+          jumpToSubtitle(-1);
+          break;
+        case 'arrowright': // Next Subtitle
+          jumpToSubtitle(1);
+          break;
+        case 'd': // Toggle Dictionary
+          if (isFullscreen) {
+            setActiveFullscreenPanel(prev => prev === 'dictionary' ? 'none' : 'dictionary');
+          } else {
+            setDictOpen(prev => !prev);
+          }
+          break;
+        case 't': // Toggle Transcript
+          toggleTranscript();
+          break;
+        case 'q': // Quick Anki Card
+          handleQuickCard();
+          break;
+        case 'm': // Toggle Mask
+          setShowMask(prev => !prev);
+          break;
+        case 'f': // Toggle Fullscreen
+          toggleFullscreen();
+          break;
+        case 'a': // Set AB Loop A
+          if (ankiConfig.abButtonMode === 'loop') {
+            const currentTime = playerRef.current?.getCurrentTime() || 0;
+            if (abLoopState === 'none') {
+              setLoopA(currentTime);
+              setAbLoopState('a-set');
+              showToast(t.pointASet, 'info');
+            } else if (abLoopState === 'looping') { // If already looping, clear it
+              setAbLoopState('none');
+              setLoopA(0);
+              setLoopB(0);
+              showToast(t.loopCleared, 'info');
+            }
+          }
+          break;
+        case 'b': // Set AB Loop B / Record Stop
+          if (ankiConfig.abButtonMode === 'loop') {
+            const currentTime = playerRef.current?.getCurrentTime() || 0;
+            if (abLoopState === 'a-set' && currentTime > loopA) {
+              setLoopB(currentTime);
+              setAbLoopState('looping');
+              showToast(t.loopingAB, 'info');
+              playerRef.current?.seekTo(loopA, 'seconds');
+            } else if (abLoopState === 'looping') { // If already looping, clear it
+              setAbLoopState('none');
+              setLoopA(0);
+              setLoopB(0);
+              showToast(t.loopCleared, 'info');
             } else {
-                setDictOpen(prev => !prev);
+              showToast(t.pointBError, 'error');
+              setAbLoopState('none');
             }
-            break;
-        case 'toggleTranscript':
-            toggleTranscript();
-            break;
-        case 'quickCard':
-            handleQuickCard();
-            break;
-        case 'toggleMask':
-            setShowMask(prev => !prev);
-            break;
-        case 'setABLoopA':
-            // If AB loop is set to record mode, this acts as the start of recording
-            if (ankiConfig.abButtonMode === 'record') {
-                if (!isRecordingRef.current) {
-                    handleStartRecording();
-                } else {
-                    handleStopRecording();
-                    setIsPlaying(false);
-                }
-            } else { // Standard AB loop behavior
-                const currentTime = playerRef.current?.getCurrentTime() || 0;
-                setLoopA(currentTime);
-                setAbLoopState('a-set');
-                showToast(t.pointASet, 'info');
+          } else if (ankiConfig.abButtonMode === 'record') {
+            if (isRecordingRef.current) {
+              handleStopRecording();
+            } else {
+              handleStartRecording();
             }
-            break;
-        case 'setABLoopB':
-            // If AB loop is set to record mode, this acts as the stop of recording
-            if (ankiConfig.abButtonMode === 'record') {
-                if (isRecordingRef.current) {
-                    handleStopRecording();
-                    setIsPlaying(false);
-                }
-            } else { // Standard AB loop behavior
-                const currentTime = playerRef.current?.getCurrentTime() || 0;
-                if (abLoopState === 'a-set' && currentTime > loopA) {
-                    setLoopB(currentTime);
-                    setAbLoopState('looping');
-                    showToast(t.loopingAB, 'info');
-                    playerRef.current?.seekTo(loopA, 'seconds');
-                } else if (abLoopState === 'looping') {
-                     // If already looping, set B again at current time
-                    setLoopB(currentTime);
-                    showToast(t.loopingAB, 'info');
-                } else {
-                    showToast(t.pointBError, 'error');
-                    setAbLoopState('none');
-                }
-            }
-            break;
-        case 'clearABLoop':
+          }
+          break;
+        case 'c': // Clear AB Loop (if in loop mode)
+          if (abLoopState !== 'none') {
             setAbLoopState('none');
             setLoopA(0);
             setLoopB(0);
             showToast(t.loopCleared, 'info');
-            break;
-        case 'performOCR':
-            if (ankiConfig.ocrEnabled) {
-                handleOcrClick();
-            }
-            break;
+          }
+          break;
+        case 'o': // Perform OCR
+          if (ankiConfig.ocrEnabled) {
+            handleOcrClick();
+          }
+          break;
         default:
-            break;
-    }
-  }, [
-      viewMode, isControlsVisible, controlsLock, isFullscreen, toggleFullscreen, togglePlay,
-      jumpToSubtitle, ankiConfig, abLoopState, loopA, loopB, showToast, t,
-      setDictOpen, setActiveFullscreenPanel, toggleTranscript, handleQuickCard, setShowMask,
-      handleStartRecording, handleStopRecording, isRecordingRef, playerRef,
-      handleOcrClick, setIsPlaying, setLoopA, setLoopB, setAbLoopState
-  ]);
-
-  useEffect(() => {
-    if (!ankiConfig.keyboardShortcutsEnabled) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Prevent default browser actions for common shortcuts
-      if (['Space', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
-        e.preventDefault();
-      }
-      
-      const keyMap = ankiConfig.customKeybindings || {};
-      const actionMap = DEFAULT_KEYBOARD_SHORTCUTS.reduce((acc, shortcut) => {
-          const key = keyMap[shortcut.action] || shortcut.defaultKey;
-          acc[key] = shortcut.action;
-          return acc;
-      }, {} as Record<string, string>);
-
-      const action = actionMap[e.code];
-
-      if (action) {
-        executeShortcut(action);
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [ankiConfig.keyboardShortcutsEnabled, ankiConfig.customKeybindings, executeShortcut]);
-
+  }, [
+    ankiConfig.keyboardShortcutsEnabled,
+    isPlaying, togglePlay,
+    abLoopState, loopA, loopB,
+    handleStartRecording, handleStopRecording,
+    ankiConfig.abButtonMode,
+    isFullscreen, setDictOpen, setActiveFullscreenPanel, toggleTranscript,
+    setShowMask, toggleFullscreen,
+    handleQuickCard, handleOcrClick, ankiConfig.ocrEnabled,
+    jumpToSubtitle, isRecordingRef, showToast, t
+  ]);
 
   return (
     <div className={`fixed inset-0 h-[100dvh] w-[100vw] flex flex-col font-sans ${viewMode === 'player' ? 'bg-black' : ''}`}>
@@ -1667,7 +1635,6 @@ const App: React.FC = () => {
         learningLang={learningLang} setLearningLang={setLearningLang} ankiConfig={ankiConfig} setAnkiConfig={setAnkiConfig}
         ankiConnected={ankiConnected} onConnectCheck={handleAnkiConnect} onExportData={handleExportData}
         onImportData={handleImportData} onClearCache={handleClearCache} importInputRef={importInputRef}
-        defaultShortcuts={DEFAULT_KEYBOARD_SHORTCUTS}
       />
       
       {playbackClip && (
@@ -1832,17 +1799,15 @@ const App: React.FC = () => {
                         />
                     )}
                     {isFullscreen && (
-                        (activeFullscreenPanel === 'dictionary' || activeFullscreenPanel === 'transcript') && ( // Conditionally mount panels
-                            <>
-                                {activeFullscreenPanel === 'dictionary' && <DictionaryPanel 
-                                    word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence, scriptHtmlDef) => addToAnki(term, def, sentence, undefined, undefined, true, false, undefined, scriptHtmlDef)} isAddingToAnki={isAddingToAnki} 
-                                    isOpen={true} onClose={handleDictClose} variant="sidebar" 
-                                    learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length}
-                                    lang={lang} searchEngine={ankiConfig.searchEngine}
-                                />}
-                                {activeFullscreenPanel === 'transcript' && <TranscriptPanel isOpen={true} onClose={() => setActiveFullscreenPanel('none')} subtitles={subtitles} currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} variant="sidebar" lang={lang} />}
-                            </>
-                        )
+                        <>
+                            <DictionaryPanel 
+                                word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence, scriptHtmlDef) => addToAnki(term, def, sentence, undefined, undefined, true, false, undefined, scriptHtmlDef)} isAddingToAnki={isAddingToAnki} 
+                                isOpen={activeFullscreenPanel === 'dictionary'} onClose={handleDictClose} variant="sidebar" 
+                                learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length}
+                                lang={lang} searchEngine={ankiConfig.searchEngine}
+                            />
+                            <TranscriptPanel isOpen={activeFullscreenPanel === 'transcript'} onClose={() => setActiveFullscreenPanel('none')} subtitles={subtitles} currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} variant="sidebar" lang={lang} />
+                        </>
                     )}
                 </div>
             </div>
@@ -1851,17 +1816,17 @@ const App: React.FC = () => {
       
       {!isFullscreen && (
         <>
-            {dictOpen && <DictionaryPanel // Conditionally mount panels
+            <DictionaryPanel 
                 word={selectedWord} sentence={selectedSentence} onAddToAnki={(term, def, sentence, scriptHtmlDef) => addToAnki(term, def, sentence, undefined, undefined, true, false, undefined, scriptHtmlDef)} isAddingToAnki={isAddingToAnki} 
                 isOpen={dictOpen} onClose={handleDictClose} variant={isWideScreen ? "sidebar" : "bottom-sheet"} 
                 learningLanguage={learningLang} onAppendNext={handleAppendWord} canAppend={nextSegmentIndex < currentSegments.length} 
                 lang={lang} searchEngine={ankiConfig.searchEngine} 
-            />}
-            {showTranscript && <TranscriptPanel // Conditionally mount panels
+            />
+            <TranscriptPanel 
                 isOpen={showTranscript} onClose={() => setShowTranscript(false)} subtitles={subtitles} 
                 currentSubtitleIndex={currentSubtitleIndex} onSeek={handleSeekTo} subtitleOffset={subtitleOffset} 
                 variant={isWideScreen ? "sidebar" : "bottom-sheet"} lang={lang} 
-            />}
+            />
         </>
       )}
     </div>

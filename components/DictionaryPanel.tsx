@@ -118,7 +118,7 @@ const DictionaryPanel: React.FC<Props> = ({
     if ((justOpened || (wordChanged && !word)) && !word) {
         setSearchTerm(''); setData(null); setScriptHtml(null);
     }
-  }, [isOpen, word, learningLanguage, activeTab]); // Added activeTab to dependencies
+  }, [isOpen, word, learningLanguage]);
 
   const fetchFromScript = (term: string) => {
       if (!term) return;
@@ -179,7 +179,6 @@ const DictionaryPanel: React.FC<Props> = ({
 
   const handleTabChange = (tab: 'dict' | 'web' | 'script') => {
       setActiveTab(tab);
-      // Only fetch if content is not already loaded for the current search term
       if (tab === 'script' && searchTerm && !scriptHtml) fetchFromScript(searchTerm);
       else if (tab === 'dict' && searchTerm && !data) fetchDefinition(searchTerm, learningLanguage);
   };
@@ -198,25 +197,25 @@ const DictionaryPanel: React.FC<Props> = ({
 
   const handleAnkiClick = () => {
       let definitionToUse = customDef;
-      let scriptDef = undefined;
+      let scriptHtmlToPass: string | undefined = undefined; // Explicitly for scriptHtmlDef parameter
 
-      // If customDef is empty, try to get definition from active tab content
-      if (!customDef) {
-          if (activeTab === 'dict' && data) {
-              definitionToUse = formatDictionaryHTML(data);
-          } else if (activeTab === 'script' && scriptHtml) {
-              // Pass scriptHtml as a distinct parameter
-              scriptDef = scriptHtml;
-          }
+      if (activeTab === 'dict' && !customDef && data) {
+          definitionToUse = formatDictionaryHTML(data);
+      } else if (activeTab === 'script' && !customDef && scriptHtml) {
+          definitionToUse = scriptHtml; // This is used for the primary 'definition' field in AnkiNoteData
+          scriptHtmlToPass = scriptHtml; // This is passed as the 'scriptHtmlDef' argument
       }
-      onAddToAnki(searchTerm, definitionToUse, sentence, scriptDef); // Pass scriptDef
+      // The `scriptHtmlToPass` will be prioritized in `App.tsx`'s `addToAnki`
+      onAddToAnki(searchTerm, definitionToUse, sentence, scriptHtmlToPass);
   };
 
   const searchUrl = getSearchUrl(searchTerm);
   const isSidebar = variant === 'sidebar';
   const containerClasses = isSidebar
-    ? `fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl z-[200] transition-transform duration-300 transform flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`
-    : `fixed bottom-0 left-0 right-0 h-[80dvh] bg-slate-900/95 backdrop-blur-2xl border-t border-white/10 shadow-2xl z-[200] transition-transform duration-300 transform flex flex-col rounded-t-2xl ${isOpen ? 'translate-y-0' : 'translate-y-full'}`;
+    ? `fixed top-0 right-0 h-full w-full md:w-[400px] bg-slate-900/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl z-[200] transition-transform duration-300 transform flex flex-col ${isOpen ? 'translate-x-0 opacity-100 pointer-events-auto' : 'translate-x-full opacity-0 pointer-events-none'}`
+    : `fixed bottom-0 left-0 right-0 h-[80dvh] bg-slate-900/95 backdrop-blur-2xl border-t border-white/10 shadow-2xl z-[200] transition-transform duration-300 transform flex flex-col rounded-t-2xl ${isOpen ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}`;
+  
+  const overlayClasses = `fixed inset-0 z-[190] transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`;
 
   const renderInteractiveSentence = () => {
       if (!sentence) return null;
@@ -238,78 +237,81 @@ const DictionaryPanel: React.FC<Props> = ({
   };
 
   return (
-    <div className={containerClasses}> {/* Removed conditional render, rely on transform */}
-      {isOpen && !isPinned && <div className="fixed inset-0 z-[190] transition-opacity" onClick={onClose} />}
-      <div className="p-4 border-b border-white/10 flex flex-col gap-3 shrink-0 bg-gradient-to-b from-white/5 to-transparent">
-          <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-slate-200 flex items-center gap-2"><BookOpen size={18} className="text-primary" /> {t.dictionary}</h3>
-              <div className="flex items-center gap-1">
-                  <button onClick={() => setIsPinned(!isPinned)} className={`p-2 rounded-full transition-colors ${isPinned ? 'text-primary bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`} title={isPinned ? "Unpin" : "Pin"}>{isPinned ? <Pin size={18} className="fill-current" /> : <Pin size={18} />}</button>
-                  <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"><X size={20} /></button>
-              </div>
-          </div>
-          <div className="flex items-center gap-2">
-              <div className="relative group flex-1">
-                 <input 
-                    value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                    className="w-full bg-black/40 border border-white/10 group-hover:border-white/20 rounded-xl pl-4 pr-24 py-2.5 text-sm text-white focus:border-primary outline-none placeholder:text-slate-500 transition-all"
-                    placeholder={t.search + "..."}
-                 />
-                 <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                    {canAppend && onAppendNext && (
-                        <button onClick={onAppendNext} className="text-primary-400 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors" title={t.appendNext}><ArrowRight size={18} /></button>
-                    )}
-                    <button 
-                        onClick={handleAnkiClick}
-                        disabled={isAddingToAnki || !searchTerm}
-                        className="text-primary-300 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        title={t.addToAnki}
-                    >
-                        {isAddingToAnki ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                    </button>
-                    <button onClick={() => handleSearch()} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"><Search size={18} /></button>
-                 </div>
-              </div>
-          </div>
+    <>
+      {/* Overlay: Only interactive when panel is open and not pinned */}
+      {(!isPinned) && <div className={overlayClasses} onClick={onClose} />}
+      <div key={isOpen ? "open" : "closed"} className={containerClasses}>
+        <div className="p-4 border-b border-white/10 flex flex-col gap-3 shrink-0 bg-gradient-to-b from-white/5 to-transparent">
+            <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-slate-200 flex items-center gap-2"><BookOpen size={18} className="text-primary" /> {t.dictionary}</h3>
+                <div className="flex items-center gap-1">
+                    <button onClick={() => setIsPinned(!isPinned)} className={`p-2 rounded-full transition-colors ${isPinned ? 'text-primary bg-white/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`} title={isPinned ? "Unpin" : "Pin"}>{isPinned ? <Pin size={18} className="fill-current" /> : <Pin size={18} />}</button>
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"><X size={20} /></button>
+                </div>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="relative group flex-1">
+                   <input 
+                      value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      className="w-full bg-black/40 border border-white/10 group-hover:border-white/20 rounded-xl pl-4 pr-24 py-2.5 text-sm text-white focus:border-primary outline-none placeholder:text-slate-500 transition-all"
+                      placeholder={t.search + "..."}
+                   />
+                   <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {canAppend && onAppendNext && (
+                          <button onClick={onAppendNext} className="text-primary-400 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors" title={t.appendNext}><ArrowRight size={18} /></button>
+                      )}
+                      <button 
+                          onClick={handleAnkiClick}
+                          disabled={isAddingToAnki || !searchTerm}
+                          className="text-primary-300 hover:text-primary hover:bg-white/10 p-1.5 rounded-lg transition-colors disabled:opacity-50"
+                          title={t.addToAnki}
+                      >
+                          {isAddingToAnki ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                      </button>
+                      <button onClick={() => handleSearch()} className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"><Search size={18} /></button>
+                   </div>
+                </div>
+            </div>
+        </div>
+        {renderInteractiveSentence()}
+        <div className="flex border-b border-white/10 shrink-0 bg-black/20">
+             <button onClick={() => handleTabChange('dict')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'dict' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><BookOpen size={14}/> {t.dictionary}</button>
+             <button onClick={() => handleTabChange('script')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'script' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><Puzzle size={14}/> Script</button>
+             <button onClick={() => handleTabChange('web')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'web' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><Globe size={14}/> Web</button>
+        </div>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+            {activeTab === 'dict' && (
+                <div className="space-y-6 p-5 pb-8">
+                    {loading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.searching}</span></div> ) 
+                    : error ? ( <div className="text-center py-20 px-6"><div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500"><Search size={32} /></div><p className="text-slate-300 mb-2 font-medium">{error}</p><p className="text-xs text-slate-500">{t.checkSpelling}</p></div> ) 
+                    : data ? (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex items-baseline justify-between mb-4 pb-4 border-b border-white/5">
+                                <div><h2 className="text-3xl font-bold text-white mb-1 tracking-tight">{data.word}</h2>{data.entries[0]?.phonetic && <span className="text-primary/80 font-mono text-sm">[{data.entries[0].phonetic}]</span>}</div>
+                                {data.entries[0]?.pronunciations?.[0]?.audio && ( <button onClick={() => playAudio(data.entries[0].pronunciations![0].audio!)} className="p-3 bg-white/5 rounded-full hover:bg-primary hover:text-white transition-all text-slate-300 shadow-lg border border-white/5"><Volume2 size={20} /></button> )}
+                            </div>
+                            {data.entries.map((entry, i) => (
+                                <div key={i} className="mb-8 last:mb-0"><span className="inline-block px-2.5 py-0.5 bg-primary/20 text-primary-200 border border-primary/20 text-[10px] font-bold uppercase rounded-md mb-3 tracking-wide">{entry.partOfSpeech}</span><div className="space-y-4">{entry.senses?.map((sense, j) => ( <div key={j} className="text-sm text-slate-300 pl-4 border-l-2 border-white/10 relative"><p className="leading-relaxed">{sense.definition}</p>{sense.examples?.[0] && ( <p className="text-xs text-slate-500 mt-1.5 italic font-medium">"{sense.examples[0]}"</p> )}</div> ))}</div></div>
+                            ))}
+                        </div>
+                    ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20"><BookOpen size={48} strokeWidth={1} /><p className="text-sm mt-4">Type a word to look up</p></div> )}
+                </div>
+            )}
+            {activeTab === 'script' && ( <div className="w-full h-full flex flex-col p-4 bg-[#0f172a] text-slate-200">{scriptLoading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.waitingForScript}</span></div> ) : scriptHtml ? ( <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col"><div className="prose prose-invert prose-sm max-w-none text-slate-200 overflow-x-hidden" dangerouslySetInnerHTML={{ __html: scriptHtml }} /></div> ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20 text-center px-4"><Puzzle size={48} strokeWidth={1} /><p className="text-sm mt-4 font-bold">{t.scriptIntegration}</p><p className="text-xs mt-2 max-w-xs">{t.installScriptHint}</p></div> )}</div> )}
+            {activeTab === 'web' && ( 
+              <div className="w-full h-full flex flex-col bg-white">
+                <a href={searchUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 border-b text-center text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-2">{t.openInBrowser} <ExternalLink size={12} /></a>
+                <iframe src={searchUrl} className="w-full flex-1 border-0" sandbox="allow-forms allow-scripts allow-same-origin" />
+                {/* Custom Definition for Web Tab */}
+                <div className="space-y-3 mt-4 pt-4 border-t border-slate-200 bg-slate-50 p-4 shrink-0">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-2"><PenTool size={12}/> {t.customDef}</h4>
+                  <textarea className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-800 focus:border-primary outline-none transition-all placeholder:text-slate-400 min-h-[80px]" placeholder="Manually add or edit definition..." value={customDef} onChange={(e) => setCustomDef(e.target.value)}></textarea>
+                </div>
+              </div> 
+            )}
+        </div>
       </div>
-      {renderInteractiveSentence()}
-      <div className="flex border-b border-white/10 shrink-0 bg-black/20">
-           <button onClick={() => handleTabChange('dict')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'dict' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><BookOpen size={14}/> {t.dictionary}</button>
-           <button onClick={() => handleTabChange('script')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'script' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><Puzzle size={14}/> Script</button>
-           <button onClick={() => handleTabChange('web')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 flex items-center justify-center gap-2 ${activeTab === 'web' ? 'border-primary text-white bg-white/5' : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'}`}><Globe size={14}/> Web</button>
-      </div>
-      <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-          {activeTab === 'dict' && (
-              <div className="space-y-6 p-5 pb-8">
-                  {loading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.searching}</span></div> ) 
-                  : error ? ( <div className="text-center py-20 px-6"><div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-500"><Search size={32} /></div><p className="text-slate-300 mb-2 font-medium">{error}</p><p className="text-xs text-slate-500">{t.checkSpelling}</p></div> ) 
-                  : data ? (
-                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                          <div className="flex items-baseline justify-between mb-4 pb-4 border-b border-white/5">
-                              <div><h2 className="text-3xl font-bold text-white mb-1 tracking-tight">{data.word}</h2>{data.entries[0]?.phonetic && <span className="text-primary/80 font-mono text-sm">[{data.entries[0].phonetic}]</span>}</div>
-                              {data.entries[0]?.pronunciations?.[0]?.audio && ( <button onClick={() => playAudio(data.entries[0].pronunciations![0].audio!)} className="p-3 bg-white/5 rounded-full hover:bg-primary hover:text-white transition-all text-slate-300 shadow-lg border border-white/5"><Volume2 size={20} /></button> )}
-                          </div>
-                          {data.entries.map((entry, i) => (
-                              <div key={i} className="mb-8 last:mb-0"><span className="inline-block px-2.5 py-0.5 bg-primary/20 text-primary-200 border border-primary/20 text-[10px] font-bold uppercase rounded-md mb-3 tracking-wide">{entry.partOfSpeech}</span><div className="space-y-4">{entry.senses?.map((sense, j) => ( <div key={j} className="text-sm text-slate-300 pl-4 border-l-2 border-white/10 relative"><p className="leading-relaxed">{sense.definition}</p>{sense.examples?.[0] && ( <p className="text-xs text-slate-500 mt-1.5 italic font-medium">"{sense.examples[0]}"</p> )}</div> ))}</div></div>
-                          ))}
-                      </div>
-                  ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20"><BookOpen size={48} strokeWidth={1} /><p className="text-sm mt-4">Type a word to look up</p></div> )}
-              </div>
-          )}
-          {activeTab === 'script' && ( <div className="w-full h-full flex flex-col p-4 bg-[#0f172a] text-slate-200">{scriptLoading ? ( <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-500"><Loader2 className="animate-spin text-primary" size={32} /><span className="text-xs font-medium uppercase tracking-widest">{t.waitingForScript}</span></div> ) : scriptHtml ? ( <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col"><div className="prose prose-invert prose-sm max-w-none text-slate-200 overflow-x-hidden" dangerouslySetInnerHTML={{ __html: scriptHtml }} /></div> ) : ( <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-50 pb-20 text-center px-4"><Puzzle size={48} strokeWidth={1} /><p className="text-sm mt-4 font-bold">{t.scriptIntegration}</p><p className="text-xs mt-2 max-w-xs">{t.installScriptHint}</p></div> )}</div> )}
-          {activeTab === 'web' && ( 
-            <div className="w-full h-full flex flex-col bg-white">
-              <a href={searchUrl} target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-100 border-b text-center text-xs text-slate-500 hover:text-primary flex items-center justify-center gap-2">{t.openInBrowser} <ExternalLink size={12} /></a>
-              <iframe src={searchUrl} className="w-full flex-1 border-0" sandbox="allow-forms allow-scripts allow-same-origin" />
-              {/* Custom Definition for Web Tab */}
-              <div className="space-y-3 mt-4 pt-4 border-t border-slate-200 bg-slate-50 p-4 shrink-0">
-                <h4 className="text-xs font-bold text-slate-600 uppercase flex items-center gap-2"><PenTool size={12}/> {t.customDef}</h4>
-                <textarea className="w-full bg-white border border-slate-300 rounded-xl p-3 text-sm text-slate-800 focus:border-primary outline-none transition-all placeholder:text-slate-400 min-h-[80px]" placeholder="Manually add or edit definition..." value={customDef} onChange={(e) => setCustomDef(e.target.value)}></textarea>
-              </div>
-            </div> 
-          )}
-      </div>
-    </div>
+    </>
   );
 };
 
