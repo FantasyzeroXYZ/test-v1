@@ -1,9 +1,9 @@
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AnkiConfig, UILanguage, LearningLanguage, ABButtonMode, KeyboardShortcut } from '../types';
 import { getTranslation } from '../i18n';
 import AnkiWidget from './AnkiWidget';
-import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2, Keyboard } from 'lucide-react';
+import { Settings as SettingsIcon, X, Sliders, ChevronDown, Type, MousePointerClick, TextCursor, Database, Download, Upload, Trash2, Keyboard, Check } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -20,29 +20,107 @@ interface Props {
   onImportData: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClearCache: () => void;
   importInputRef: React.RefObject<HTMLInputElement>;
+  defaultShortcuts: KeyboardShortcut[]; // New prop for default shortcuts
 }
 
-const KeyboardShortcuts: KeyboardShortcut[] = [
-    { key: 'Space', description: 'shortcutPlayPause' },
-    { key: 'Left Arrow (←)', description: 'shortcutPrevSub' },
-    { key: 'Right Arrow (→)', description: 'shortcutNextSub' },
-    { key: 'D', description: 'shortcutToggleDict' },
-    { key: 'T', description: 'shortcutToggleTranscript' },
-    { key: 'Q', description: 'shortcutQuickCard' },
-    { key: 'M', description: 'shortcutToggleMask' },
-    { key: 'F', description: 'shortcutToggleFullscreen' },
-    { key: 'A', description: 'shortcutSetA' },
-    { key: 'B', description: 'shortcutSetB' },
-    { key: 'C', description: 'shortcutClearAB' },
-    { key: 'O', description: 'shortcutOcr' },
-];
+// Helper to format key codes for display
+const formatKeyCode = (keyCode: string): string => {
+    if (!keyCode) return '';
+    if (keyCode.startsWith('Key')) return keyCode.substring(3);
+    if (keyCode.startsWith('Digit')) return keyCode.substring(5);
+    switch (keyCode) {
+        case 'Space': return 'Space';
+        case 'ArrowUp': return '↑';
+        case 'ArrowDown': return '↓';
+        case 'ArrowLeft': return '←';
+        case 'ArrowRight': return '→';
+        case 'Enter': return 'Enter';
+        case 'Escape': return 'Esc';
+        case 'ShiftLeft': case 'ShiftRight': return 'Shift';
+        case 'ControlLeft': case 'ControlRight': return 'Ctrl';
+        case 'AltLeft': case 'AltRight': return 'Alt';
+        case 'MetaLeft': case 'MetaRight': return 'Meta'; // Cmd or Win key
+        default: return keyCode;
+    }
+};
 
 const SettingsSidebar: React.FC<Props> = ({
   isOpen, onClose, lang, setLang, learningLang, setLearningLang,
   ankiConfig, setAnkiConfig, ankiConnected, onConnectCheck,
-  onExportData, onImportData, onClearCache, importInputRef
+  onExportData, onImportData, onClearCache, importInputRef,
+  defaultShortcuts
 }) => {
   const t = getTranslation(lang);
+  const [settingKeyFor, setSettingKeyFor] = useState<string | null>(null); // State to track which action is being set
+  const [keybindingConflict, setKeybindingConflict] = useState<string | null>(null); // State for conflict message
+
+  // Effect to listen for key presses when setting a shortcut
+  useEffect(() => {
+    if (!settingKeyFor) return;
+
+    const handleKeyCapture = (e: KeyboardEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const newKeyCode = e.code;
+
+        // Check for conflicts
+        const currentCustomKeybindings = ankiConfig.customKeybindings || {};
+        const allKeybindings = defaultShortcuts.reduce((acc, shortcut) => {
+            acc[currentCustomKeybindings[shortcut.action] || shortcut.defaultKey] = shortcut.action;
+            return acc;
+        }, {} as Record<string, string>);
+
+        const conflictingAction = allKeybindings[newKeyCode];
+
+        if (conflictingAction && conflictingAction !== settingKeyFor) {
+            setKeybindingConflict(`${t.alreadyBound} "${t[conflictingAction as keyof typeof t]}"`);
+            // Don't set the key, but allow user to try again
+        } else {
+            // No conflict or conflict with self, set the key
+            setAnkiConfig(prev => ({
+                ...prev,
+                customKeybindings: {
+                    ...prev.customKeybindings,
+                    [settingKeyFor]: newKeyCode,
+                },
+            }));
+            setSettingKeyFor(null); // Exit key setting mode
+            setKeybindingConflict(null); // Clear any previous conflict message
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyCapture, true); // Use capture phase
+    return () => {
+        window.removeEventListener('keydown', handleKeyCapture, true);
+    };
+  }, [settingKeyFor, ankiConfig.customKeybindings, ankiConfig, setAnkiConfig, defaultShortcuts, t]);
+
+  const getEffectiveKey = useCallback((action: string): string => {
+    return ankiConfig.customKeybindings?.[action] || defaultShortcuts.find(s => s.action === action)?.defaultKey || '';
+  }, [ankiConfig.customKeybindings, defaultShortcuts]);
+
+  const handleClearKey = (action: string) => {
+    const updatedBindings = { ...ankiConfig.customKeybindings };
+    delete updatedBindings[action];
+    setAnkiConfig(prev => ({
+      ...prev,
+      customKeybindings: updatedBindings,
+    }));
+    if (settingKeyFor === action) {
+      setSettingKeyFor(null);
+      setKeybindingConflict(null);
+    }
+  };
+
+  const handleResetAllShortcuts = () => {
+    setAnkiConfig(prev => ({
+      ...prev,
+      customKeybindings: {},
+    }));
+    setSettingKeyFor(null);
+    setKeybindingConflict(null);
+  };
 
   return (
     <>
@@ -51,10 +129,10 @@ const SettingsSidebar: React.FC<Props> = ({
               <h3 className="font-semibold text-white flex items-center gap-2"><SettingsIcon size={18} className="text-primary"/> {t.settings}</h3>
               <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors"><X size={22} /></button>
           </div>
-          <div className="p-5 space-y-4 overflow-y-auto h-[calc(100%-70px)]">
+          <div className="p-5 space-y-4 overflow-y-auto h-[calc(100%-70px)] custom-scrollbar">
               
               {/* Basic Settings */}
-              <details className="group">
+              <details className="group" open> {/* Open by default for better UX */}
                   <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                       <div className="flex items-center gap-2"><Sliders size={14} /> {t.basicSettings}</div>
                       <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
@@ -229,21 +307,87 @@ const SettingsSidebar: React.FC<Props> = ({
               </details>
 
               {/* Keyboard Shortcuts Section */}
-              <details className="group">
+              <details className="group" open>
                   <summary className="list-none flex items-center justify-between cursor-pointer text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                       <div className="flex items-center gap-2"><Keyboard size={14} /> {t.keyboardShortcuts}</div>
                       <ChevronDown size={14} className="group-open:rotate-180 transition-transform"/>
                   </summary>
                   <div className="pl-4 pb-4 space-y-3">
-                      <p className="text-xs text-slate-400">{t.keyboardDesc}</p>
-                      <ul className="space-y-1">
-                          {KeyboardShortcuts.map((shortcut, index) => (
-                              <li key={index} className="flex justify-between items-center text-sm text-slate-300">
-                                  <span className="font-mono bg-white/10 px-2 py-0.5 rounded-md text-primary-200 text-[11px]">{shortcut.key}</span>
-                                  <span className="flex-1 text-right ml-2">{t[shortcut.description as keyof typeof t]}</span>
-                              </li>
-                          ))}
-                      </ul>
+                      <p className="text-xs text-slate-400 mb-4">{t.keyboardDesc}</p>
+                      
+                      {/* Enable/Disable Toggle */}
+                      <label className="flex items-center justify-between cursor-pointer group mb-4">
+                          <span className="text-sm font-medium text-slate-200">{t.enableShortcuts}</span>
+                          <div className="relative">
+                              <input 
+                                  type="checkbox" 
+                                  className="sr-only peer"
+                                  checked={!!ankiConfig.keyboardShortcutsEnabled}
+                                  onChange={(e) => setAnkiConfig({...ankiConfig, keyboardShortcutsEnabled: e.target.checked})}
+                              />
+                              <div className="w-9 h-5 bg-white/10 rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-3.5 after:w-3.5 after:transition-all"></div>
+                          </div>
+                      </label>
+
+                      {ankiConfig.keyboardShortcutsEnabled && (
+                          <div className="space-y-2 animate-in fade-in duration-200">
+                              {/* Conflict Message */}
+                              {keybindingConflict && (
+                                <div className="p-2 text-xs text-red-400 bg-red-500/10 rounded border border-red-500/20 mb-3 animate-in fade-in">
+                                  {keybindingConflict}
+                                </div>
+                              )}
+
+                              {defaultShortcuts.map((shortcut) => {
+                                  const currentKey = getEffectiveKey(shortcut.action);
+                                  const isCustom = ankiConfig.customKeybindings && ankiConfig.customKeybindings[shortcut.action] !== undefined;
+
+                                  return (
+                                      <div key={shortcut.action} className="flex items-center justify-between">
+                                          <span className="text-sm text-slate-300 flex-1">{t[shortcut.description as keyof typeof t]}</span>
+                                          <div className="flex items-center gap-1">
+                                              <span className={`font-mono px-2 py-1 rounded text-[11px] min-w-[70px] text-center ${isCustom ? 'bg-primary/20 text-primary-200' : 'bg-white/10 text-slate-400'}`}>
+                                                  {settingKeyFor === shortcut.action ? t.pressKey : formatKeyCode(currentKey)}
+                                              </span>
+                                              <button 
+                                                  onClick={() => {
+                                                      if (settingKeyFor === shortcut.action) {
+                                                          setSettingKeyFor(null); // Cancel setting
+                                                          setKeybindingConflict(null);
+                                                      } else {
+                                                          setSettingKeyFor(shortcut.action);
+                                                          setKeybindingConflict(null); // Clear conflict on new set attempt
+                                                      }
+                                                  }}
+                                                  className={`p-1.5 rounded transition-colors text-xs flex items-center gap-1 
+                                                      ${settingKeyFor === shortcut.action ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-white/10 hover:bg-white/20 text-slate-400 hover:text-white'}`}
+                                                  disabled={settingKeyFor !== null && settingKeyFor !== shortcut.action}
+                                              >
+                                                  {settingKeyFor === shortcut.action ? <X size={14}/> : <Keyboard size={14}/>} {settingKeyFor === shortcut.action ? t.cancel : t.setKey}
+                                              </button>
+                                              {isCustom && (
+                                                  <button
+                                                      onClick={() => handleClearKey(shortcut.action)}
+                                                      className="p-1.5 rounded transition-colors text-xs flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-400 hover:text-white"
+                                                      title={t.clearKey}
+                                                      disabled={settingKeyFor !== null}
+                                                  >
+                                                      <Trash2 size={14}/>
+                                                  </button>
+                                              )}
+                                          </div>
+                                      </div>
+                                  );
+                              })}
+                              <button
+                                  onClick={handleResetAllShortcuts}
+                                  className="w-full text-center text-xs font-bold text-red-400 hover:text-red-300 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-colors mt-4"
+                                  disabled={settingKeyFor !== null}
+                              >
+                                  {t.resetAllShortcuts}
+                              </button>
+                          </div>
+                      )}
                       <p className="text-xs text-slate-500 italic mt-3 pt-3 border-t border-white/5">{t.gamepadSupport}</p>
                   </div>
               </details>

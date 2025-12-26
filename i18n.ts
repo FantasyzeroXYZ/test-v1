@@ -245,6 +245,7 @@ export const translations = {
     // Keyboard Shortcuts
     keyboardShortcuts: "Keyboard Shortcuts",
     keyboardDesc: "Control playback and features using keyboard or Bluetooth gamepad.",
+    enableShortcuts: "Enable Shortcuts",
     shortcutPlayPause: "Play/Pause",
     shortcutPrevSub: "Previous Subtitle",
     shortcutNextSub: "Next Subtitle",
@@ -257,7 +258,12 @@ export const translations = {
     shortcutSetB: "Set AB Loop B / Record Stop",
     shortcutClearAB: "Clear AB Loop",
     shortcutOcr: "Perform OCR",
-    gamepadSupport: "Bluetooth gamepads are supported. Map your controller buttons to these keyboard shortcuts for seamless control. (e.g., A/Cross for Play/Pause, L1/R1 for Prev/Next Subtitle).",
+    setKey: "Set Key",
+    pressKey: "Press a key...",
+    alreadyBound: "Key already bound to another action: ",
+    clearKey: "Clear",
+    resetAllShortcuts: "Reset All Shortcuts",
+    gamepadSupport: "Bluetooth gamepads are supported. You can configure your gamepad to emulate keyboard presses (e.g., A/Cross for Space, L1/R1 for Left/Right Arrow) to control VAMplayer. Direct gamepad button mapping is not supported in-app.",
   },
   zh: {
     library: "返回库",
@@ -502,6 +508,7 @@ export const translations = {
     // Keyboard Shortcuts
     keyboardShortcuts: "快捷键设置",
     keyboardDesc: "使用键盘或蓝牙手柄控制播放和各项功能。",
+    enableShortcuts: "启用快捷键",
     shortcutPlayPause: "播放/暂停",
     shortcutPrevSub: "上一句字幕",
     shortcutNextSub: "下一句字幕",
@@ -514,7 +521,12 @@ export const translations = {
     shortcutSetB: "设置 AB 循环 B点 / 停止录制",
     shortcutClearAB: "清除 AB 循环",
     shortcutOcr: "执行 OCR 识别",
-    gamepadSupport: "支持蓝牙手柄。您可以将手柄按键映射到这些快捷键，实现无缝操作。（例如：A/叉键用于播放/暂停，L1/R1 用于上/下句字幕）。",
+    setKey: "设置按键",
+    pressKey: "按下按键...",
+    alreadyBound: "该按键已绑定到：",
+    clearKey: "清除",
+    resetAllShortcuts: "重置所有快捷键",
+    gamepadSupport: "支持蓝牙手柄。您可以将手柄按键配置为模拟键盘按键（例如：A/叉键对应空格键，L1/R1对应左右方向键）来控制 VAMplayer。应用内不直接支持手柄按键映射。",
   }
 };
 

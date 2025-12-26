@@ -68,6 +68,8 @@ export interface AnkiConfig {
   abButtonMode?: ABButtonMode; // 'loop' (3 clicks) or 'record' (2 clicks)
   ocrLang?: string; // Default OCR Language
   ocrEnabled?: boolean; // Default OCR Enabled status
+  keyboardShortcutsEnabled?: boolean; // Enable/Disable keyboard shortcuts
+  customKeybindings?: Record<string, string>; // Custom keybindings map: action -> keycode
 }
 
 export interface AnkiNoteData {
@@ -134,7 +136,7 @@ export interface AnkiConnectResponse<T> {
 }
 
 export interface KeyboardShortcut {
-  key: string;
-  description: string;
-  global?: boolean; // If true, works outside of player focus
+  action: string; // Unique identifier for the action
+  defaultKey: string; // Default key code (e.g., 'Space', 'ArrowLeft')
+  description: string; // i18n key for description
 }
