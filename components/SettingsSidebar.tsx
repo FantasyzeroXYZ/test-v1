@@ -276,7 +276,7 @@ const SettingsSidebar: React.FC<Props> = ({
                                   />
                                   <div className="w-8 h-4 bg-white/10 rounded-full peer peer-checked:bg-primary peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all"></div>
                               </div>
-                              <span className="text-[10px] text-slate-400">{t.enableOcr}</span> {/* Reusing generic 'enable' label */}
+                              <span className="text-[10px] text-slate-400">{t.enableShortcuts}</span>
                           </label>
                           <button onClick={resetBindings} className="text-[10px] text-slate-500 hover:text-white underline">Reset</button>
                       </div>

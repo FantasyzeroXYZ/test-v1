@@ -1,7 +1,9 @@
+
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnkiNoteData, UILanguage, Subtitle, LearningLanguage } from '../types';
 import { getTranslation } from '../i18n';
-import { Save, X, Clock, Image as ImageIcon, Scissors, Play, Check, ScanEye, Trash2, Eraser, Volume2, RotateCcw, Video, Mic } from 'lucide-react';
+import { Save, X, Clock, Image as ImageIcon, Scissors, Play, Check, ScanEye, Trash2, Eraser, Volume2, RotateCcw, Video, Mic, Layout } from 'lucide-react';
 import { formatTime } from '../utils';
 
 interface Props {
@@ -18,10 +20,11 @@ interface Props {
   onSeek: (time: number) => void;
   onPlayAudioRange: (start: number, end: number) => void;
   isOcclusionMode?: boolean; 
+  onSetCover?: (imageData: string) => void;
 }
 
 const AnkiEditModal: React.FC<Props> = ({ 
-  isOpen, onClose, onConfirm, initialData, lang, learningLang, currentPlayerTime, duration, subtitles = [], onRetakeImage, onSeek, onPlayAudioRange, isOcclusionMode = false
+  isOpen, onClose, onConfirm, initialData, lang, learningLang, currentPlayerTime, duration, subtitles = [], onRetakeImage, onSeek, onPlayAudioRange, isOcclusionMode = false, onSetCover
 }) => {
   const t = getTranslation(lang);
   const [data, setData] = useState<AnkiNoteData>(initialData);
@@ -371,6 +374,16 @@ const AnkiEditModal: React.FC<Props> = ({
                                         ></div>
                                     )}
                                 </div>
+                            )}
+                            
+                            {/* Set Cover Button (Overlay) */}
+                            {onSetCover && !isOcclusionMode && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); onSetCover(data.imageData || ''); }}
+                                    className="absolute bottom-2 right-2 bg-black/60 hover:bg-black/80 text-white text-xs px-2 py-1 rounded backdrop-blur border border-white/20 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <Layout size={12}/> {t.setAsCover}
+                                </button>
                             )}
                           </div>
                       ) : !isScrubbingImage ? (

@@ -408,6 +408,55 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleSetVideoCover = async (base64Data: string) => {
+      if (!activeVideoItem) return;
+      // AnkiEditModal provides base64 without prefix usually, but let's check
+      const thumbnailData = base64Data.startsWith('data:') ? base64Data : `data:image/jpeg;base64,${base64Data}`;
+      const updatedItem = { ...activeVideoItem, thumbnail: thumbnailData };
+      
+      try {
+          await saveVideo(updatedItem);
+          setLibraryItems(prev => prev.map(i => i.id === updatedItem.id ? updatedItem : i));
+          setActiveVideoItem(updatedItem);
+          showToast(t.coverUpdated, 'success');
+      } catch (e) {
+          console.error("Failed to set cover", e);
+          showToast("Failed to update cover", 'error');
+      }
+  };
+
+  const handleUpdateLocalVideo = async (id: string, newTitle: string, source: string, file?: File, thumbnail?: string) => {
+      const item = libraryItems.find(i => i.id === id);
+      if (!item) return;
+      let updatedItem = { ...item, title: newTitle, source: source };
+      
+      // Update thumbnail if provided explicitly
+      if (thumbnail) {
+          updatedItem.thumbnail = thumbnail;
+      }
+
+      if (file) {
+          const thumb = !thumbnail ? await generateVideoThumbnail(file) : thumbnail;
+          const newUrl = URL.createObjectURL(file);
+          updatedItem = { 
+              ...updatedItem, 
+              src: newUrl, 
+              file: file, 
+              thumbnail: thumb || updatedItem.thumbnail,
+              type: file.type.startsWith('audio') ? 'audio' : 'video',
+              filename: file.name
+          };
+          await saveVideo(updatedItem, file);
+      } else {
+          await saveVideo(updatedItem); 
+      }
+      setLibraryItems(prev => prev.map(i => i.id === id ? updatedItem : i));
+      if (activeVideoItem?.id === id) {
+          setActiveVideoItem(updatedItem);
+      }
+      showToast(t.updateVideo + ": Success", 'success');
+  };
+
   const handleStartRecording = useCallback((modeOverride?: 'video' | 'audio') => {
       const videoEl = playerRef.current?.getInternalPlayer() as HTMLVideoElement;
       if (!videoEl) return;
@@ -776,32 +825,6 @@ const App: React.FC = () => {
           }
       };
       reader.readAsText(file);
-  };
-
-  const handleUpdateLocalVideo = async (id: string, newTitle: string, source: string, file?: File) => {
-      const item = libraryItems.find(i => i.id === id);
-      if (!item) return;
-      let updatedItem = { ...item, title: newTitle, source: source };
-      if (file) {
-          const thumb = await generateVideoThumbnail(file);
-          const newUrl = URL.createObjectURL(file);
-          updatedItem = { 
-              ...updatedItem, 
-              src: newUrl, 
-              file: file, 
-              thumbnail: thumb || updatedItem.thumbnail,
-              type: file.type.startsWith('audio') ? 'audio' : 'video',
-              filename: file.name
-          };
-          await saveVideo(updatedItem, file);
-      } else {
-          await saveVideo(updatedItem); 
-      }
-      setLibraryItems(prev => prev.map(i => i.id === id ? updatedItem : i));
-      if (activeVideoItem?.id === id) {
-          setActiveVideoItem(updatedItem);
-      }
-      showToast(t.updateVideo + ": Success", 'success');
   };
 
   const handleBackToLibrary = () => {
@@ -1213,6 +1236,7 @@ const App: React.FC = () => {
       left: `${videoGeometry.left}px`,
       width: `${videoGeometry.width}px`,
       height: `${(maskHeight / 100) * videoGeometry.height}px`,
+      zIndex: 20
   };
 
   const isM3U8 = useMemo(() => {
@@ -1768,6 +1792,10 @@ const App: React.FC = () => {
                                 <button onClick={handleQuickCard} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-full backdrop-blur-sm transition-all"><PlusSquare size={20} /></button>
                             </div>
                         </div>
+                        
+                        {/* MASK MOVED HERE - Inside videoWrapperRef but before Player content logic for stacking */}
+                        {showMask && <div className="absolute backdrop-blur-xl bg-white/5 border-y border-white/10 z-20 flex group/mask" style={maskStyle}><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /><div className="w-24 cursor-row-resize hover:bg-white/5 transition-colors border-x border-white/5" onMouseDown={(e) => handleMaskMouseDown(e, 'resize')} onTouchStart={(e) => handleMaskMouseDown(e, 'resize')} /><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /></div>}
+
                         <div className={`w-full h-full flex items-center justify-center ${mediaType === 'audio' ? 'hidden' : 'block'}`}>
                             <Player 
                                 key={`${activeVideoItem?.id}-${isM3U8}`}
@@ -1813,13 +1841,14 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         )}
+                        {/* Subtitles z-index is higher (z-40 in class definition in component or logic) */}
                         {subtitleVisible && isSubtitleActive && (
                             <div className={`absolute left-4 right-4 text-center pointer-events-auto transition-all duration-300 z-40 flex justify-center`} style={subtitleBottomStyle}>
                                 {renderCurrentSubtitles()}
                             </div>
                         )}
                     </div>
-                    {showMask && <div className="absolute backdrop-blur-xl bg-white/5 border-y border-white/10 z-20 flex group/mask" style={maskStyle}><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /><div className="w-24 cursor-row-resize hover:bg-white/5 transition-colors border-x border-white/5" onMouseDown={(e) => handleMaskMouseDown(e, 'resize')} onTouchStart={(e) => handleMaskMouseDown(e, 'resize')} /><div className="flex-1 cursor-ns-resize" onMouseDown={(e) => handleMaskMouseDown(e, 'move')} onTouchStart={(e) => handleMaskMouseDown(e, 'move')} /></div>}
+                    {/* Previous Mask Location (Removed) */}
                     <PlayerControls 
                         isControlsVisible={isControlsVisible} isLiveStream={isLiveStream} playedSeconds={playedSeconds} duration={duration} onSeekMouseDown={handleSeekMouseDown} onSeekChange={handleSeekChange} onSeekMouseUp={handleSeekMouseUp}
                         isPlaying={isPlaying} onTogglePlay={togglePlay} onJumpSubtitle={jumpToSubtitle} abLoopState={abLoopState} abButtonMode={ankiConfig.abButtonMode || 'loop'} onABLoopClick={handleABLoopClick} showSubSettings={showSubSettings} setShowSubSettings={setShowSubSettings}
@@ -1829,6 +1858,7 @@ const App: React.FC = () => {
                     {isAnkiModalOpen && <AnkiEditModal 
                         isOpen={isAnkiModalOpen} onClose={() => setIsAnkiModalOpen(false)} onConfirm={handleConfirmAddNote} initialData={pendingNote} lang={lang} learningLang={learningLang} currentPlayerTime={playedSeconds} duration={duration} subtitles={subtitles}
                         onRetakeImage={handleRetakeImage} onSeek={handleSeekTo} onPlayAudioRange={handlePreviewAudio} isOcclusionMode={ankiModalMode === 'occlusion'}
+                        onSetCover={handleSetVideoCover}
                     />}
                     <BookmarkModal 
                         isOpen={bookmarkModalState.isOpen} onClose={() => setBookmarkModalState(prev => ({...prev, isOpen: false}))} onConfirm={handleSaveBookmark} onRecordVideo={(start, end) => handleTriggerRecording('video', start, end)} onRecordAudio={(start, end) => handleTriggerRecording('audio', start, end)}

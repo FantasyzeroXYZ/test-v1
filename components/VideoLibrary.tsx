@@ -1,9 +1,8 @@
-
 import React, { useRef, useState, useEffect } from 'react';
 import { VideoLibraryItem, UILanguage } from '../types';
 import { getTranslation } from '../i18n';
 import { formatTime } from '../utils';
-import { Play, Film, Music, FileText, Languages, Trash2, Link as LinkIcon, Plus, X, Check, Upload, Edit, HardDrive, Globe, Radio, FolderInput, FileDown, LayoutGrid, List } from 'lucide-react';
+import { Play, Film, Music, FileText, Languages, Trash2, Link as LinkIcon, Plus, X, Check, Upload, Edit, HardDrive, Globe, Radio, FolderInput, FileDown, LayoutGrid, List, Image as ImageIcon, Download } from 'lucide-react';
 
 interface Props {
   items: VideoLibraryItem[];
@@ -13,7 +12,7 @@ interface Props {
   onAddNetworkVideo: (url: string, title: string, source: string, id?: string, isLive?: boolean) => void; // Added source
   onDeleteVideo: (id: string) => void;
   onImportSubtitleAndPlay: (item: VideoLibraryItem, file: File, type: 'primary' | 'secondary', shouldPlay: boolean) => void;
-  onUpdateLocalVideo: (id: string, newTitle: string, source: string, file?: File) => void; // Added source
+  onUpdateLocalVideo: (id: string, newTitle: string, source: string, file?: File, thumbnail?: string) => void; // Added thumbnail
 }
 
 const VideoLibrary: React.FC<Props> = ({ 
@@ -29,6 +28,7 @@ const VideoLibrary: React.FC<Props> = ({
   const t = getTranslation(lang);
   const hiddenSubInputRef = useRef<HTMLInputElement>(null);
   const hiddenReimportInputRef = useRef<HTMLInputElement>(null);
+  const hiddenCoverInputRef = useRef<HTMLInputElement>(null);
   
   const activeItemRef = useRef<VideoLibraryItem | null>(null);
   const activeSubTypeRef = useRef<'primary' | 'secondary'>('primary');
@@ -43,6 +43,7 @@ const VideoLibrary: React.FC<Props> = ({
   // Local Edit State
   const [isEditingLocal, setIsEditingLocal] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [currentThumbnail, setCurrentThumbnail] = useState<string | null>(null);
 
   // View Mode State
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -85,6 +86,7 @@ const VideoLibrary: React.FC<Props> = ({
     setEditingId(item.id);
     setTitleInput(item.title);
     setSourceInput(item.source || '');
+    setCurrentThumbnail(item.thumbnail || null);
     
     // Check if it's local. Use isLocal flag first as file might be missing in metadata
     if (item.isLocal) {
@@ -110,6 +112,20 @@ const VideoLibrary: React.FC<Props> = ({
       e.target.value = '';
   };
 
+  const handleCoverFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              if (ev.target?.result) {
+                  setCurrentThumbnail(ev.target.result as string);
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+      e.target.value = '';
+  };
+
   const handleLocalFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -125,6 +141,7 @@ const VideoLibrary: React.FC<Props> = ({
       setSourceInput('');
       setIsLiveInput(false);
       setIsEditingLocal(false);
+      setCurrentThumbnail(null);
       setShowUrlModal(true);
   };
 
@@ -137,12 +154,13 @@ const VideoLibrary: React.FC<Props> = ({
       setIsLiveInput(false);
       setIsEditingLocal(false);
       setPendingFile(null);
+      setCurrentThumbnail(null);
   };
 
   const submitUrl = () => {
     if (isEditingLocal && editingId) {
         if (titleInput) {
-            onUpdateLocalVideo(editingId, titleInput, sourceInput, pendingFile || undefined);
+            onUpdateLocalVideo(editingId, titleInput, sourceInput, pendingFile || undefined, currentThumbnail || undefined);
             handleCloseModal();
         }
     } else {
@@ -217,6 +235,13 @@ const VideoLibrary: React.FC<Props> = ({
         accept="video/*,audio/*,.mkv" 
         className="hidden" 
         onChange={handleReimportFileChange}
+      />
+      <input 
+        type="file" 
+        ref={hiddenCoverInputRef} 
+        accept="image/*" 
+        className="hidden" 
+        onChange={handleCoverFileChange}
       />
 
       <div className="flex flex-row items-center justify-between mb-6 md:mb-8 gap-4">
@@ -484,13 +509,50 @@ const VideoLibrary: React.FC<Props> = ({
       {/* Add/Edit Modal */}
       {showUrlModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-[#1e293b] border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-[#1e293b] border border-white/10 rounded-xl p-6 w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-white">{editingId ? t.updateVideo : t.addVideo}</h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-white"><X size={20}/></button>
             </div>
             <div className="space-y-4">
               
+              {/* Cover Image Editor (Only in Edit Mode) */}
+              {editingId && (
+                  <div className="bg-white/5 rounded-lg p-3 border border-white/5 space-y-2">
+                      <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-slate-400">{t.coverImage}</label>
+                          <div className="flex gap-2">
+                              <button 
+                                onClick={() => hiddenCoverInputRef.current?.click()}
+                                className="text-[10px] flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors text-white"
+                              >
+                                  <Upload size={10} /> {t.uploadCover}
+                              </button>
+                              {currentThumbnail && (
+                                <button 
+                                    onClick={() => {
+                                        const a = document.createElement('a');
+                                        a.href = currentThumbnail;
+                                        a.download = `cover_${titleInput || 'video'}.jpg`;
+                                        a.click();
+                                    }}
+                                    className="text-[10px] flex items-center gap-1 bg-white/10 hover:bg-white/20 px-2 py-1 rounded transition-colors text-white"
+                                >
+                                    <Download size={10} /> {t.downloadCover}
+                                </button>
+                              )}
+                          </div>
+                      </div>
+                      <div className="relative w-full aspect-video bg-black/50 rounded overflow-hidden flex items-center justify-center">
+                          {currentThumbnail ? (
+                              <img src={currentThumbnail} alt="Cover" className="w-full h-full object-cover" />
+                          ) : (
+                              <ImageIcon className="text-slate-500 w-8 h-8" />
+                          )}
+                      </div>
+                  </div>
+              )}
+
               {/* Title Field (Always Visible) */}
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">{t.videoTitle}</label>

@@ -1,4 +1,5 @@
 
+
 import { UILanguage } from './types';
 
 export const translations = {
@@ -119,6 +120,8 @@ export const translations = {
     releaseToCapture: "Release to Capture",
     extendStartTo: "Extend start to",
     extendEndTo: "Extend end to",
+    setAsCover: "Set as Cover",
+    coverUpdated: "Cover image updated",
     
     // Advanced Edit
     cropMode: "Text Crop",
@@ -152,6 +155,9 @@ export const translations = {
     recordClip: "Record Video",
     recordAudioClip: "Record Audio",
     categoryColor: "Category Color",
+    coverImage: "Cover Image",
+    uploadCover: "Upload Cover",
+    downloadCover: "Download",
 
     // Image Occlusion
     screenshot: "Screenshot / Image Occlusion",
@@ -244,7 +250,7 @@ export const translations = {
 
     // Keyboard Shortcuts
     keyboardShortcuts: "Keyboard Shortcuts",
-    keyboardDesc: "Control playback and features using keyboard or Bluetooth gamepad.",
+    enableShortcuts: "Enable Shortcuts",
     shortcutPlayPause: "Play/Pause",
     shortcutPrevSub: "Previous Subtitle",
     shortcutNextSub: "Next Subtitle",
@@ -376,6 +382,8 @@ export const translations = {
     releaseToCapture: "松开以捕获",
     extendStartTo: "扩展起点至",
     extendEndTo: "扩展终点至",
+    setAsCover: "设为条目封面",
+    coverUpdated: "封面已更新",
 
     // Advanced Edit
     cropMode: "文本裁剪",
@@ -409,6 +417,9 @@ export const translations = {
     recordClip: "录制视频片段",
     recordAudioClip: "录制音频",
     categoryColor: "分类颜色",
+    coverImage: "封面图片",
+    uploadCover: "上传封面",
+    downloadCover: "下载",
 
     // Image Occlusion
     screenshot: "截图 / 图片遮挡",
@@ -501,7 +512,7 @@ export const translations = {
 
     // Keyboard Shortcuts
     keyboardShortcuts: "快捷键设置",
-    keyboardDesc: "使用键盘或蓝牙手柄控制播放和各项功能。",
+    enableShortcuts: "启用快捷键",
     shortcutPlayPause: "播放/暂停",
     shortcutPrevSub: "上一句字幕",
     shortcutNextSub: "下一句字幕",
@@ -514,7 +525,7 @@ export const translations = {
     shortcutSetB: "设置 AB 循环 B点 / 停止录制",
     shortcutClearAB: "清除 AB 循环",
     shortcutOcr: "执行 OCR 识别",
-    gamepadSupport: "支持蓝牙手柄。您可以将手柄按键映射到这些快捷键，实现无缝操作。（例如：A/叉键用于播放/暂停，L1/R1 用于上/下句字幕）。",
+    gamepadSupport: "支持蓝牙手柄。",
   }
 };
 
